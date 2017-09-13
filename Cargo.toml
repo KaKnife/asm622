@@ -1,0 +1,6 @@
+[package]
+name = "asm622"
+version = "0.1.0"
+authors = ["Jacob Humphrey <jacob.ryan.humphrey@gmail.com>"]
+
+[dependencies]
