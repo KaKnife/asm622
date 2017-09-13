@@ -110,7 +110,9 @@ fn main() {
                 continue;
             }
         };
-        hex_table.update(instruction.offset(), &instruction.to_hex());
+        if !error {
+            hex_table.update(instruction.offset(), &instruction.to_hex());
+        }
     }
 
     // output the result to a hex file if no errors

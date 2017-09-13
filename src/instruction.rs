@@ -24,6 +24,7 @@ enum OpType {
 
 #[derive(Debug, Clone)]
 enum Mnemonic {
+    Cpl,
     Bb,
     Cseg,
     Org,
@@ -185,6 +186,7 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Data(d))) => vec![0x7E,d],
             (&Some(Mov),&Some(R7),&Some(Data(d))) => vec![0x7F,d],
 
+            (&Some(Sjmp),&Some(Addr(d)),&None) => vec![0x80,((d as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8],
             (&Some(Mov),&Some(Data(d)),&Some(A)) => vec![0x84,d],
             (&Some(Mov),&Some(Data(d)),&Some(Addr(a))) => vec![0x85,a,d],
             (&Some(Mov),&Some(Data(d)),&Some(AtR0)) => vec![0x86,d],
@@ -202,7 +204,10 @@ impl Instruction {
 
             (&Some(Mov),&Some(C),&Some(Addr(d))) => vec![0xA2,d],
 
-            (&Some(Sjmp),&Some(Addr(d)),&None) => vec![0x80,((d as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8],
+            (&Some(Cpl),&Some(Addr(d)),&None) => vec![0xB2,d],
+            (&Some(Cpl),&Some(C),&None) => vec![0xB3],
+
+
             (&Some(Org),_,_) => vec![],
             (&Some(Cseg),_,_) => vec![],
             (&Some(Bb), &Some(Label(ref l)), &None) => {
@@ -213,7 +218,7 @@ impl Instruction {
                 v
             },
             (&None,_,_) => vec![],
-            _ => unimplemented!(),
+            (a@_,b@_,c@_) => unimplemented!("{:?},{:?},{:?}", a,b,c),
         }
     }
 
@@ -260,6 +265,7 @@ impl Instruction {
                 "addc" => Some(Addc),
                 "rlc" => Some(Rlc),
                 "anl" => Some(Anl),
+                "cpl" => Some(Cpl),
                 "end" => None,
                 m @ _ => return Err(format!("unknown mnemonic: line {}: {}",line.num,m)),
             };
@@ -439,8 +445,9 @@ fn other_op(mut op: String) -> OpType {
             op.remove(len -1);
             return OpType::Data(u8::from_str_radix(&op, 16).unwrap())
         }
-        if op == "0" {
-            return OpType::Data(0)
+        match u8::from_str_radix(&op, 10) {
+            Ok(a) => return OpType::Data(a),
+            Err(e) => {},
         }
         println!("Unknown Literal: {}",op );
     }
