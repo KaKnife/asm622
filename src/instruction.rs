@@ -74,6 +74,10 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    pub fn short_jmp(&self, addr: u8) -> u8 {
+        ((addr as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8
+    }
+
     pub fn to_hex(&self) -> Vec<u8> {
 
         match (&self.mnemonic, & self.op1, & self.op2) {
@@ -186,7 +190,7 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Data(d))) => vec![0x7E,d],
             (&Some(Mov),&Some(R7),&Some(Data(d))) => vec![0x7F,d],
 
-            (&Some(Sjmp),&Some(Addr(d)),&None) => vec![0x80,((d as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8],
+            (&Some(Sjmp),&Some(Addr(d)),&None) => vec![0x80,self.short_jmp(d)],
             (&Some(Mov),&Some(Data(d)),&Some(A)) => vec![0x84,d],
             (&Some(Mov),&Some(Data(d)),&Some(Addr(a))) => vec![0x85,a,d],
             (&Some(Mov),&Some(Data(d)),&Some(AtR0)) => vec![0x86,d],
@@ -207,6 +211,14 @@ impl Instruction {
             (&Some(Cpl),&Some(Addr(d)),&None) => vec![0xB2,d],
             (&Some(Cpl),&Some(C),&None) => vec![0xB3],
 
+            (&Some(Djnz),&Some(R0),&Some(Addr(d))) => vec![0xD8,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R1),&Some(Addr(d))) => vec![0xD9,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R2),&Some(Addr(d))) => vec![0xDA,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R3),&Some(Addr(d))) => vec![0xDB,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R4),&Some(Addr(d))) => vec![0xDC,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R5),&Some(Addr(d))) => vec![0xDD,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R6),&Some(Addr(d))) => vec![0xDE,self.short_jmp(d)],
+            (&Some(Djnz),&Some(R7),&Some(Addr(d))) => vec![0xDF,self.short_jmp(d)],
 
             (&Some(Org),_,_) => vec![],
             (&Some(Cseg),_,_) => vec![],
