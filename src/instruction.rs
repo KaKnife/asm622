@@ -257,7 +257,18 @@ impl Instruction {
             //TODO: code A1
             (&Some(Inc),&Some(C),&Some(Addr(d))) => vec![0xA2,d],
             (&Some(Inc),&Some(Dptr),&None) => vec![0xA3],
-
+            (&Some(Mov),&Some(A),&Some(Addr(d))) => vec![0xA4,d],
+            (&Some(Mov),&Some(Addr(a)),&Some(Addr(d))) => vec![0xA5,a,d],
+            (&Some(Mov),&Some(AtR0),&Some(Addr(d))) => vec![0xA6,d],
+            (&Some(Mov),&Some(AtR1),&Some(Addr(d))) => vec![0xA7,d],
+            (&Some(Mov),&Some(R0),&Some(Addr(d))) => vec![0xA8,d],
+            (&Some(Mov),&Some(R1),&Some(Addr(d))) => vec![0xA9,d],
+            (&Some(Mov),&Some(R2),&Some(Addr(d))) => vec![0xAA,d],
+            (&Some(Mov),&Some(R3),&Some(Addr(d))) => vec![0xAB,d],
+            (&Some(Mov),&Some(R4),&Some(Addr(d))) => vec![0xAC,d],
+            (&Some(Mov),&Some(R5),&Some(Addr(d))) => vec![0xAD,d],
+            (&Some(Mov),&Some(R6),&Some(Addr(d))) => vec![0xAE,d],
+            (&Some(Mov),&Some(R7),&Some(Addr(d))) => vec![0xAF,d],
 
             (&Some(Cpl),&Some(Addr(d)),&None) => vec![0xB2,d],
             (&Some(Cpl),&Some(C),&None) => vec![0xB3],
