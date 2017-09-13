@@ -83,6 +83,9 @@ impl Instruction {
 
         match (&self.mnemonic, & self.op1, & self.op2) {
             (&Some(Nop),&None,&None) => vec![0x00],
+            //TODO: code 01
+            //TODO: code 02
+            (&Some(Rr),&Some(A),&None) => vec![0x03],
             (&Some(Inc),&Some(A),&None) => vec![0x04],
             (&Some(Inc),&Some(Data(d)),&None) => vec![0x05,d],
             (&Some(Inc),&Some(AtR0),&None) => vec![0x06],
@@ -96,6 +99,9 @@ impl Instruction {
             (&Some(Inc),&Some(R6),&None) => vec![0x0E],
             (&Some(Inc),&Some(R7),&None) => vec![0x0F],
 
+            //TODO: code 10
+            //TODO: code 11
+            //TODO: code 12
             (&Some(Rrc),&Some(A),&None) => vec![0x13],
             (&Some(Dec),&Some(A),&None) => vec![0x14],
             (&Some(Dec),&Some(Addr(d)),&None) => vec![0x15,d],
@@ -110,7 +116,10 @@ impl Instruction {
             (&Some(Dec),&Some(R6),&None) => vec![0x1E],
             (&Some(Dec),&Some(R7),&None) => vec![0x1F],
 
+            //TODO: code 20
+            //TODO: code 21
             (&Some(Ret),&None,&None) => vec![0x22],
+            (&Some(Rl),&Some(A),&None) => vec![0x23],
             (&Some(Add),&Some(A),&Some(Data(d))) => vec![0x24,d],
             (&Some(Add),&Some(A),&Some(Addr(d))) => vec![0x25,d],
             (&Some(Add),&Some(A),&Some(AtR0)) => vec![0x26],
@@ -124,6 +133,8 @@ impl Instruction {
             (&Some(Add),&Some(A),&Some(R6)) => vec![0x2E],
             (&Some(Add),&Some(A),&Some(R7)) => vec![0x2F],
 
+            //TODO: code 30
+            //TODO: code 31
             (&Some(Reti),&None,&None) => vec![0x32],
             (&Some(Rlc),&None,&None) => vec![0x33],
             (&Some(Addc),&Some(A),&Some(Data(d))) => vec![0x34,d],
@@ -139,6 +150,10 @@ impl Instruction {
             (&Some(Addc),&Some(A),&Some(R6)) => vec![0x3E],
             (&Some(Addc),&Some(A),&Some(R7)) => vec![0x3F],
 
+            //TODO: code 40
+            //TODO: code 41
+            //TODO: code 42
+            //TODO: code 43
             (&Some(Orl),&Some(A),&Some(Data(d))) => vec![0x44,d],
             (&Some(Orl),&Some(A),&Some(Addr(d))) => vec![0x45,d],
             (&Some(Orl),&Some(A),&Some(AtR0)) => vec![0x46],
@@ -152,6 +167,10 @@ impl Instruction {
             (&Some(Orl),&Some(A),&Some(R6)) => vec![0x4E],
             (&Some(Orl),&Some(A),&Some(R7)) => vec![0x4F],
 
+            //TODO: code 50
+            //TODO: code 51
+            //TODO: code 52
+            //TODO: code 53
             (&Some(Anl),&Some(A),&Some(Data(d))) => vec![0x54,d],
             (&Some(Anl),&Some(A),&Some(Addr(d))) => vec![0x55,d],
             (&Some(Anl),&Some(A),&Some(AtR0)) => vec![0x56],
@@ -165,6 +184,10 @@ impl Instruction {
             (&Some(Anl),&Some(A),&Some(R6)) => vec![0x5E],
             (&Some(Anl),&Some(A),&Some(R7)) => vec![0x5F],
 
+            //TODO: code 60
+            //TODO: code 61
+            (&Some(Xrl),&Some(Addr(d)),&Some(A)) => vec![0x62,d],
+            (&Some(Xrl),&Some(Addr(a)),&Some(Data(d))) => vec![0x63,a,d],
             (&Some(Xrl),&Some(A),&Some(Data(d))) => vec![0x64,d],
             (&Some(Xrl),&Some(A),&Some(Addr(d))) => vec![0x65,d],
             (&Some(Xrl),&Some(A),&Some(AtR0)) => vec![0x66],
@@ -178,6 +201,10 @@ impl Instruction {
             (&Some(Xrl),&Some(A),&Some(R6)) => vec![0x6E],
             (&Some(Xrl),&Some(A),&Some(R7)) => vec![0x6F],
 
+            //TODO: code 70
+            //TODO: code 71
+            (&Some(Orl),&Some(C),&Some(Addr(d))) => vec![0x72,d],
+            //TODO: code 73
             (&Some(Mov),&Some(A),&Some(Data(d))) => vec![0x74,d],
             (&Some(Mov),&Some(Addr(a)),&Some(Data(d))) => vec![0x75,a,d],
             (&Some(Mov),&Some(AtR0),&Some(Data(d))) => vec![0x76,d],
@@ -192,6 +219,9 @@ impl Instruction {
             (&Some(Mov),&Some(R7),&Some(Data(d))) => vec![0x7F,d],
 
             (&Some(Sjmp),&Some(Addr(d)),&None) => vec![0x80,self.short_jmp(d)],
+            //TODO: code 81
+            (&Some(Anl),&Some(C),&Some(Addr(d))) => vec![0x82,d],
+            //TODO: code 83
             (&Some(Mov),&Some(Data(d)),&Some(A)) => vec![0x84,d],
             (&Some(Mov),&Some(Data(d)),&Some(Addr(a))) => vec![0x85,a,d],
             (&Some(Mov),&Some(Data(d)),&Some(AtR0)) => vec![0x86,d],
@@ -205,7 +235,11 @@ impl Instruction {
             (&Some(Mov),&Some(Data(d)),&Some(R6)) => vec![0x8E,d],
             (&Some(Mov),&Some(Data(d)),&Some(R7)) => vec![0x8F,d],
 
+            //TODO: code 90
+            //TODO: code 91
             (&Some(Mov),&Some(Addr(d)),&Some(C)) => vec![0x92,d],
+            //TODO: code 93
+
 
             (&Some(Mov),&Some(C),&Some(Addr(d))) => vec![0xA2,d],
 
