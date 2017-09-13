@@ -100,7 +100,7 @@ impl Instruction {
             (&Some(Inc),&Some(R6),&None) => vec![0x0E],
             (&Some(Inc),&Some(R7),&None) => vec![0x0F],
 
-            //TODO: code 10
+            (&Some(Jbc),&Some(Addr(b)),&Some(Addr(d))) => vec![0x10,b,self.short_jmp(d)],
             //TODO: code 11
             //TODO: code 12
             (&Some(Rrc),&Some(A),&None) => vec![0x13],
@@ -270,9 +270,15 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Addr(d))) => vec![0xAE,d],
             (&Some(Mov),&Some(R7),&Some(Addr(d))) => vec![0xAF,d],
 
+            //TODO: code B0
+            //TODO: code B1
             (&Some(Cpl),&Some(Addr(d)),&None) => vec![0xB2,d],
             (&Some(Cpl),&Some(C),&None) => vec![0xB3],
+            //TODO: codes B4-BF
 
+            //TODO: codes C0-CF
+
+            //TODO: codes D0-D7
             (&Some(Djnz),&Some(R0),&Some(Addr(d))) => vec![0xD8,self.short_jmp(d)],
             (&Some(Djnz),&Some(R1),&Some(Addr(d))) => vec![0xD9,self.short_jmp(d)],
             (&Some(Djnz),&Some(R2),&Some(Addr(d))) => vec![0xDA,self.short_jmp(d)],
@@ -281,6 +287,8 @@ impl Instruction {
             (&Some(Djnz),&Some(R5),&Some(Addr(d))) => vec![0xDD,self.short_jmp(d)],
             (&Some(Djnz),&Some(R6),&Some(Addr(d))) => vec![0xDE,self.short_jmp(d)],
             (&Some(Djnz),&Some(R7),&Some(Addr(d))) => vec![0xDF,self.short_jmp(d)],
+
+            //TODO: Codes E0-FF
 
             (&Some(Org),_,_) => vec![],
             (&Some(Cseg),_,_) => vec![],
