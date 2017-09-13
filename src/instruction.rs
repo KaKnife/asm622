@@ -20,6 +20,7 @@ enum OpType {
     AtR1,
     C,
     Label(String),
+    Dptr,
 }
 
 #[derive(Debug, Clone)]
@@ -239,9 +240,24 @@ impl Instruction {
             //TODO: code 91
             (&Some(Mov),&Some(Addr(d)),&Some(C)) => vec![0x92,d],
             //TODO: code 93
+            (&Some(Subb),&Some(A),&Some(Data(d))) => vec![0x94,d],
+            (&Some(Subb),&Some(A),&Some(Addr(d))) => vec![0x95,d],
+            (&Some(Subb),&Some(A),&Some(AtR0)) => vec![0x96],
+            (&Some(Subb),&Some(A),&Some(AtR1)) => vec![0x97],
+            (&Some(Subb),&Some(A),&Some(R0)) => vec![0x98],
+            (&Some(Subb),&Some(A),&Some(R1)) => vec![0x99],
+            (&Some(Subb),&Some(A),&Some(R2)) => vec![0x9A],
+            (&Some(Subb),&Some(A),&Some(R3)) => vec![0x9B],
+            (&Some(Subb),&Some(A),&Some(R4)) => vec![0x9C],
+            (&Some(Subb),&Some(A),&Some(R5)) => vec![0x9D],
+            (&Some(Subb),&Some(A),&Some(R6)) => vec![0x9E],
+            (&Some(Subb),&Some(A),&Some(R7)) => vec![0x9F],
 
+            //TODO: code A0
+            //TODO: code A1
+            (&Some(Inc),&Some(C),&Some(Addr(d))) => vec![0xA2,d],
+            (&Some(Inc),&Some(Dptr),&None) => vec![0xA3],
 
-            (&Some(Mov),&Some(C),&Some(Addr(d))) => vec![0xA2,d],
 
             (&Some(Cpl),&Some(Addr(d)),&None) => vec![0xB2,d],
             (&Some(Cpl),&Some(C),&None) => vec![0xB3],
@@ -337,6 +353,7 @@ impl Instruction {
                 "r0" => Some(OpType::R0),
                 "c" => Some(OpType::C),
                 "a" => Some(OpType::A),
+                "dptr" => Some(Dptr),
                 "b" =>Some(Label("B".to_string())),
                 op @ _ => Some(other_op(op.to_string())),
             };
@@ -360,6 +377,7 @@ impl Instruction {
                 "c" => Some(OpType::C),
                 "a" => Some(OpType::A),
                 "b" =>Some(Label("B".to_string())),
+                "dptr" => Some(Dptr),
                 op @ _ => Some(other_op(op.to_string())),
             };
         }
