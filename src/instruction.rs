@@ -25,7 +25,7 @@ enum OpType {
 #[derive(Debug, Clone)]
 enum Mnemonic {
     Cpl,
-    Bb,
+    Db,
     Cseg,
     Org,
     Nop,
@@ -61,6 +61,7 @@ enum Mnemonic {
     Movx,
     Clr,
     Sjmp,
+    Ds,
 }
 
 #[derive(Clone)]
@@ -222,13 +223,14 @@ impl Instruction {
 
             (&Some(Org),_,_) => vec![],
             (&Some(Cseg),_,_) => vec![],
-            (&Some(Bb), &Some(Label(ref l)), &None) => {
+            (&Some(Db), &Some(Label(ref l)), &None) => {
                 let mut v = l.clone().into_bytes();
                 v.remove(l.len()-1);
                 v.remove(0);
                 v.push(0);
                 v
             },
+            (&Some(Ds),&Some(Addr(d)),&None) => vec![0x10;d as usize],
             (&None,_,_) => vec![],
             (a@_,b@_,c@_) => unimplemented!("{:?},{:?},{:?}", a,b,c),
         }
@@ -241,12 +243,12 @@ impl Instruction {
 
         if line.mnu.is_some() {
             mne = match line.mnu.unwrap().to_lowercase().as_ref() {
-                "bb" => Some(Bb),
+                "db" => Some(Db),
                 "mov" => Some(Mnemonic::Mov),
                 "sjmp" => Some(Mnemonic::Sjmp),
                 "add" => Some(Mnemonic::Add),
                 "org" => Some(Mnemonic::Org),
-                "cseg" => Some(Cseg),
+                "cseg" | "dseg" => Some(Cseg),
                 "nop" => Some(Nop),
                 "ajmp" => Some(Ajmp),
                 "ljmp" => Some(Ljmp),
@@ -278,6 +280,7 @@ impl Instruction {
                 "rlc" => Some(Rlc),
                 "anl" => Some(Anl),
                 "cpl" => Some(Cpl),
+                "ds" => Some(Ds),
                 "end" => None,
                 m @ _ => return Err(format!("unknown mnemonic: line {}: {}",line.num,m)),
             };
@@ -354,12 +357,18 @@ impl Instruction {
                         _ => {},
                     };
                 },
-                Bb => {
+                Db => {
                     match self.op1.clone().unwrap() {
                         Label(l)=> return l.len() as i16,
                         _ => {},
                     };
-                }
+                },
+                Ds => {
+                    match self.op1.clone().unwrap() {
+                        Addr(l)=> return l as i16,
+                        _ => {},
+                    };
+                },
                 _ =>{},
             }
             len +=1;
@@ -389,7 +398,7 @@ impl Instruction {
             return Ok(())
         }
         match self.mnemonic.clone().unwrap() {
-            Cseg | Bb => return Ok(()),
+            Cseg | Db => return Ok(()),
             _ => {},
         }
         let label_table = table.clone();
