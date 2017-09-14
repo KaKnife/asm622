@@ -111,7 +111,15 @@ fn main() {
             }
         };
         if !error {
-            hex_table.update(instruction.offset(), &instruction.to_hex());
+            let hex = match instruction.to_hex(){
+                Ok(h) => h,
+                Err(e) => {
+                    println!("Error: {}", e);
+                    error = true;
+                    continue;
+                }
+            };
+            hex_table.update(instruction.offset(), &hex);
         }
     }
 
