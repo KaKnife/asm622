@@ -17,7 +17,7 @@ fn main() {
     let mut instructions: Vec<Instruction> = Vec::new();
     let label_table;
     let mut error = false; //if there is an error in the compulation
-    let mut offset = 0u8; //the offset counter for instructions
+    let mut offset = 0; //the offset counter for instructions
 
     // Create a path to the desired file
     let path = Path::new(&args[1]);
@@ -55,7 +55,7 @@ fn main() {
             line = tmp[1];
         }
 
-        let mut cmd: Vec<&str> = line.split(|c| c == ' ' || c == ',' || c == ':').collect();
+        let mut cmd: Vec<&str> = line.split(|c| c == ' ' || c == ',' || c == ':'|| c == '\t').collect();
         cmd.retain(|x| x.to_string() != "");
         if cmd.len() > 0 {
             mnu = Some(cmd[0].to_string());
@@ -84,7 +84,7 @@ fn main() {
                 continue;
             }
         };
-        offset =(offset as i16 +ins.len())as u8;
+        offset =(offset as i32 +ins.len() as i32)as u16;
         // print!("{}", ins);
         instructions.push(ins);
     }
@@ -154,8 +154,8 @@ fn main() {
 
 }
 
-fn build_label_table(instrucions:& Vec<Instruction>) -> Vec<(String, u8)> {
-    let mut table: Vec<(String, u8)> = Vec::new();
+fn build_label_table(instrucions:& Vec<Instruction>) -> Vec<(String, u16)> {
+    let mut table: Vec<(String, u16)> = Vec::new();
     let mut label_instructions = instrucions.clone();
     label_instructions.retain(|x| x.label.is_some());
     for label in label_instructions {

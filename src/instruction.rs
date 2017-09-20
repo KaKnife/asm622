@@ -3,7 +3,7 @@ use std::fmt::Display;
 use self::Mnemonic::*;
 use self::OpType::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 enum OpType {
     A,
     R0,
@@ -15,7 +15,9 @@ enum OpType {
     R6,
     R7,
     Data(u8),
+    Data16(u16),
     Addr(u8),
+    Addr16(u16),
     AtR0,
     AtR1,
     C,
@@ -67,7 +69,7 @@ enum Mnemonic {
 
 #[derive(Clone)]
 pub struct Instruction {
-    offset:u8 ,
+    offset:u16 ,
     num: u8,
     pub label: Option<String>,
     mnemonic: Option<Mnemonic>,
@@ -81,7 +83,10 @@ impl Instruction {
     }
 
     pub fn to_hex(&self) -> Result<Vec<u8>, String> {
-
+        match self.validate() {
+            Ok(()) => {},
+            Err(e) => return Err(e),
+        }
         match (&self.mnemonic, & self.op1, & self.op2) {
             (&Some(Nop),&None,&None) => Ok(vec![0x00]),
             //TODO: code 01
@@ -288,7 +293,18 @@ impl Instruction {
             (&Some(Djnz),&Some(R6),&Some(Addr(d))) => Ok(vec![0xDE,self.short_jmp(d)]),
             (&Some(Djnz),&Some(R7),&Some(Addr(d))) => Ok(vec![0xDF,self.short_jmp(d)]),
 
-            //TODO: Codes E0-FF
+            //TODO: Codes E0-F5
+
+            (&Some(Mov),&Some(AtR0),&Some(A)) => Ok(vec![0xF6]),
+            (&Some(Mov),&Some(AtR1),&Some(A)) => Ok(vec![0xF7]),
+            (&Some(Mov),&Some(R0),&Some(A)) => Ok(vec![0xF8]),
+            (&Some(Mov),&Some(R1),&Some(A)) => Ok(vec![0xF9]),
+            (&Some(Mov),&Some(R2),&Some(A)) => Ok(vec![0xFA]),
+            (&Some(Mov),&Some(R3),&Some(A)) => Ok(vec![0xFB]),
+            (&Some(Mov),&Some(R4),&Some(A)) => Ok(vec![0xFC]),
+            (&Some(Mov),&Some(R5),&Some(A)) => Ok(vec![0xFD]),
+            (&Some(Mov),&Some(R6),&Some(A)) => Ok(vec![0xFE]),
+            (&Some(Mov),&Some(R7),&Some(A)) => Ok(vec![0xFF]),
 
             (&Some(Org),_,_) => Ok(vec![]),
             (&Some(Cseg),_,_) => Ok(vec![]),
@@ -301,11 +317,11 @@ impl Instruction {
             },
             (&Some(Ds),&Some(Addr(d)),&None) => Ok(vec![0x10;d as usize]),
             (&None,_,_) => Ok(vec![]),
-            (a@_,b@_,c@_) => Err(format!("{:?},{:?},{:?}", a,b,c)),
+            (a@_,b@_,c@_) => Err(format!("Unimplemented: {:?},{:?},{:?}", a,b,c)),
         }
     }
 
-    pub fn from_line(line:Line, offset: u8) -> Result<Self, String> {
+    pub fn from_line(line:Line, offset: u16) -> Result<Self, String> {
         let mne;
         let op1;
         let op2;
@@ -374,7 +390,12 @@ impl Instruction {
                 "a" => Some(OpType::A),
                 "dptr" => Some(Dptr),
                 "b" =>Some(Label("B".to_string())),
-                op @ _ => Some(other_op(op.to_string())),
+                op @ _ => {
+                    match other_op(op.to_string()){
+                        Ok(op) => Some(op),
+                        Err(e) => return Err(e),
+                    }
+                },
             };
         }
         else {
@@ -397,7 +418,12 @@ impl Instruction {
                 "a" => Some(OpType::A),
                 "b" =>Some(Label("B".to_string())),
                 "dptr" => Some(Dptr),
-                op @ _ => Some(other_op(op.to_string())),
+                op @ _ => {
+                    match other_op(op.to_string()){
+                        Ok(op) => Some(op),
+                        Err(e) => return Err(e),
+                    }
+                },
             };
         }
         else {
@@ -407,36 +433,38 @@ impl Instruction {
         Ok(Instruction{offset:offset, num: line.num, label:line.label, mnemonic: mne, op1: op1, op2: op2,})
     }
 
-    pub fn offset(&self) ->u8 {
+    pub fn offset(&self) ->u16 {
         self.offset
     }
 
     #[allow(unused_variables)]
-    pub fn len(&self) ->i16 {
+    pub fn len(&self) ->i32 {
         let mut len = 0;
         if self.mnemonic.is_some() {
             match self.mnemonic.clone().unwrap(){
                 Org => {
                     match self.op1.clone().unwrap() {
-                        Data(d)| Addr(d)=> return d as i16 - self.offset as i16,
+                        Data(d)| Addr(d) => return d as i32 - self.offset as i32,
+                        Addr16(d)=> return d as i32 - self.offset as i32,
                         _ => {},
                     };
                 },
                 Cseg => {
                     match self.op2.clone().unwrap() {
-                        Data(d)| Addr(d)=> return d as i16 - self.offset as i16,
+                        Data(d)| Addr(d) => return d as i32 - self.offset as i32,
+                        Addr16(d)=> return d as i32 - self.offset as i32,
                         _ => {},
                     };
                 },
                 Db => {
                     match self.op1.clone().unwrap() {
-                        Label(l)=> return l.len() as i16,
+                        Label(l)=> return l.len() as i32,
                         _ => {},
                     };
                 },
                 Ds => {
                     match self.op1.clone().unwrap() {
-                        Addr(l)=> return l as i16,
+                        Addr(l)=> return l as i32,
                         _ => {},
                     };
                 },
@@ -463,8 +491,7 @@ impl Instruction {
 
     }
 
-    #[allow(unused_variables)]
-    pub fn fix_label(&mut self, table: &Vec<(String, u8)>) -> Result<(), String>{
+    pub fn fix_label(&mut self, table: &Vec<(String, u16)>) -> Result<(), String>{
         if self.mnemonic.is_none() {
             return Ok(())
         }
@@ -488,10 +515,10 @@ impl Instruction {
                     if split.len()>1 {
                         add = match u8::from_str_radix(split[1], 16){
                             Ok(a) => a,
-                            Err(e) => 0,
+                            Err(_) => 0,
                         };
                     }
-                    self.op1 = Some(OpType::Addr(addr+add));
+                    self.op1 = Some(OpType::Addr16(addr+add as u16));
                 },
                 _=>{},
             }
@@ -513,10 +540,10 @@ impl Instruction {
                     if split.len()>1 {
                         add = match u8::from_str_radix(split[1], 16){
                             Ok(a) => a,
-                            Err(e) => 0,
+                            Err(_) => 0,
                         };
                     }
-                    self.op2 = Some(OpType::Addr(addr+add));
+                    self.op2 = Some(OpType::Addr16(addr+add as u16));
                 },
                 _=>{},
             }
@@ -525,39 +552,92 @@ impl Instruction {
 
         Ok(())
     }
+
+    pub fn validate(&self) -> Result<(), String> {
+        match (&self.op1, &self.op2) {
+            (&Some(Data16(_)), &Some(_)) | (_, &Some(Data16(_))) => {
+                return Err(String::from("There can only be one opperand when one is Data16"))
+            },
+            _ => {}
+        }
+        match &self.mnemonic {
+            &None => Ok(()),
+            &Some(Nop) => {
+                if self.op1.is_some() | self.op1.is_some(){
+                    return Err(String::from("NOP takes no operands"))
+                }
+                Ok(())
+            },
+
+            _ => Ok(()),
+        }
+    }
 }
 
-#[allow(unused_variables)]
-fn other_op(mut op: String) -> OpType {
+fn other_op(mut op: String) -> Result<OpType, String> {
     op.trim();
     if op.starts_with("#") {
         op.remove(0);
         if op.ends_with("h") {
             let len = op.len();
             op.remove(len -1);
-            return OpType::Data(u8::from_str_radix(&op, 16).unwrap())
+             match u8::from_str_radix(&op, 16){
+                Ok(d) => return Ok(Data(d)),
+                Err(_) => {},
+            };
+            return  match u16::from_str_radix(&op, 16){
+                Ok(d) => Ok(Data16(d)),
+                Err(_) => return Err(String::from("Invalid Data")),
+            }
         }
         match u8::from_str_radix(&op, 10) {
-            Ok(a) => return OpType::Data(a),
-            Err(e) => {},
+            Ok(a) => return Ok(Data(a)),
+            Err(_) => {},
         }
-        println!("Unknown Literal: {}",op );
+        match u16::from_str_radix(&op, 10) {
+            Ok(a) => return Ok(Data16(a)),
+            Err(_) => return Err(String::from("Invalid Data")),
+        }
     }
     if op.ends_with("h") {
         let len = op.len();
         let mut temp = op.clone();
         temp.remove(len -1);
         match u8::from_str_radix(&temp, 16){
-            Ok(a) => return Addr(a),
-
-            Err(e) => {},
+            Ok(a) => return Ok( Addr(a)),
+            Err(_) => {},
+        }
+        match u16::from_str_radix(&temp, 16){
+            Ok(a) => return Ok( Addr16(a)),
+            Err(_) => return Err(String::from("Invalid Address")),
         }
     }
-    match u8::from_str_radix(&op, 16) {
-        Ok(a) => return OpType::Addr(a),
-        Err(e) => {},
+    if op.starts_with("0x") {
+        let mut temp = op.clone();
+        temp.remove(0);
+        temp.remove(0);
+        match u8::from_str_radix(&temp, 16){
+            Ok(a) => return Ok( Addr(a)),
+            Err(_) => {},
+        }
+        match u16::from_str_radix(&temp, 16){
+            Ok(a) => return Ok( Addr16(a)),
+            Err(_) => return Err(String::from("Invalid Address")),
+        }
     }
-    OpType::Label(op)
+    match u8::from_str_radix(&op, 10){
+        Ok(a) => return Ok( Addr(a)),
+        Err(_) => {},
+    }
+    match u16::from_str_radix(&op, 10){
+        Ok(a) => return Ok( Addr16(a)),
+        Err(_) => {},
+    }
+    match u64::from_str_radix(&op, 10) {
+        Ok(_) => return Err(String::from("Invalid Address")),
+        Err(_) => {},
+    };
+    Ok(Label(op))
 }
 
 
@@ -582,4 +662,63 @@ impl Display for Instruction {
         };
         write!(f, "{}", out)
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn other_op_data() {
+        assert_eq!(other_op(String::from("#0")), Ok(Data(0)));
+        assert_eq!(other_op(String::from("#10")), Ok(Data(10)));
+        assert_eq!(other_op(String::from("#10h")), Ok(Data(0x10)));
+        assert_eq!(other_op(String::from("#100h")), Ok(Data16(0x100)));
+        assert_eq!(other_op(String::from("#10000")), Ok(Data16(10000)));
+        match other_op(String::from("#10000h")) {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        }
+        match other_op(String::from("#65536")) {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        }
+
+
+    }
+
+    #[test]
+    fn other_op_addr() {
+        assert_eq!(other_op(String::from("0")), Ok(Addr(0)));
+        assert_eq!(other_op(String::from("10")), Ok(Addr(10)));
+        assert_eq!(other_op(String::from("0x10")), Ok(Addr(0x10)));
+        assert_eq!(other_op(String::from("10h")), Ok(Addr(0x10)));
+        assert_eq!(other_op(String::from("100h")), Ok(Addr16(0x100)));
+        assert_eq!(other_op(String::from("10000")), Ok(Addr16(10000)));
+        match other_op(String::from("#10000h")) {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        }
+        match other_op(String::from("#65536")) {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        }
+
+    }
+
+    #[test]
+    fn nop() {
+        let ins1 = Instruction{offset:0, num:0, label:None, mnemonic:Some(Nop), op1:None, op2:None};
+        let ins2 = Instruction{offset:22, num:4, label:Some(String::from("HI")), mnemonic:Some(Nop), op1:Some(R1), op2:None};
+
+        assert_eq!(ins1.validate(), Ok(()));
+        match ins2.validate() {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        }
+        assert_eq!(ins1.to_hex(), Ok(vec![00]));
+        assert_eq!(ins1.len(), 1);
+    }
+
+
 }
