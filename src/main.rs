@@ -293,8 +293,8 @@ fn output_hex(name:String, records:Vec<omf::ContentRecord>) {
         if record.data().len()>0{
             let mut line_out_hex = Vec::new();
             line_out_hex.push(record.data().len() as u8);
-            line_out_hex.push((record.offset()/0xFF )as u8);
-            line_out_hex.push((record.offset()%0xFF) as u8);
+            line_out_hex.push((record.offset()/0x100 )as u8);
+            line_out_hex.push((record.offset()%0x100) as u8);
             line_out_hex.push(00);
             line_out_hex.append(&mut record.data());
             let chk_some = checksome(&line_out_hex);
@@ -303,12 +303,12 @@ fn output_hex(name:String, records:Vec<omf::ContentRecord>) {
             for h in line_out_hex{
                 line_out+=&format!("{:02x}", h);
             }
-            write!(file, "{}\n", line_out.to_uppercase());
+            write!(file, "{}\n", line_out.to_uppercase()).unwrap();
             out+=&line_out;
         }
 
     }
-    write!(file, ":00000001FF\n");
+    write!(file, ":00000001FF\n").unwrap();
 
     println!("successfully assembled to {}", display);
 

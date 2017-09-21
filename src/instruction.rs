@@ -23,10 +23,22 @@ enum OpType {
     C,
     Label(String),
     Dptr,
+    AtDptr,
+    AB,
+    AtADptr,
+    AtAPc,
 }
 
 #[derive(Debug, Clone)]
 enum Mnemonic {
+    Jmp,
+    Setb,
+    Da,
+    Xchd,
+    Push,
+    Pop,
+    Swap,
+    Mul,
     Cpl,
     Db,
     Cseg,
@@ -66,6 +78,7 @@ enum Mnemonic {
     Clr,
     Sjmp,
     Ds,
+    Movc,
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +93,9 @@ pub struct Instruction {
 
 impl Instruction {
     fn short_jmp(&self, addr: u16) -> u8 {
+        // println!("{}", addr );
+        // println!("{}", self.offset);
+        // println!("{}", self.len());
         ((addr as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8
     }
 
@@ -90,8 +106,8 @@ impl Instruction {
         }
         match (&self.mnemonic, & self.op1, & self.op2) {
             (&Some(Nop),&None,&None) => Ok(vec![0x00]),
-            //TODO: code 01
-            //TODO: code 02
+            (&Some(Ajmp),&Some(Addr16(d)),&None) => Ok(vec![0x01,d as u8]),
+            (&Some(Ljmp),&Some(Addr16(d)),&None) => Ok(vec![0x02,(d/0x100)as u8,(d%0x100) as u8]),
             (&Some(Rr),&Some(A),&None) => Ok(vec![0x03]),
             (&Some(Inc),&Some(A),&None) => Ok(vec![0x04]),
             (&Some(Inc),&Some(Data(d)),&None) => Ok(vec![0x05,d]),
@@ -106,9 +122,9 @@ impl Instruction {
             (&Some(Inc),&Some(R6),&None) => Ok(vec![0x0E]),
             (&Some(Inc),&Some(R7),&None) => Ok(vec![0x0F]),
 
-            (&Some(Jbc),&Some(Addr(b)),&Some(Addr(d))) => Ok(vec![0x10,b,self.short_jmp(d as u16)]),
-            //TODO: code 11
-            //TODO: code 12
+            (&Some(Jbc),&Some(Addr(b)),&Some(Addr16(d))) => Ok(vec![0x10,b,self.short_jmp(d as u16)]),
+            (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0x11,d as u8]),
+            (&Some(Lcall),&Some(Addr16(d)),&None) => Ok(vec![0x12,(d/0x100)as u8,(d%0x100) as u8]),
             (&Some(Rrc),&Some(A),&None) => Ok(vec![0x13]),
             (&Some(Dec),&Some(A),&None) => Ok(vec![0x14]),
             (&Some(Dec),&Some(Addr(d)),&None) => Ok(vec![0x15,d]),
@@ -123,8 +139,8 @@ impl Instruction {
             (&Some(Dec),&Some(R6),&None) => Ok(vec![0x1E]),
             (&Some(Dec),&Some(R7),&None) => Ok(vec![0x1F]),
 
-            //TODO: code 20
-            //TODO: code 21
+            (&Some(Jb),&Some(Addr(a)),&Some(Addr16(d))) => Ok(vec![0x20,a,self.short_jmp(d as u16)]),
+            //TODo: code 21
             (&Some(Ret),&None,&None) => Ok(vec![0x22]),
             (&Some(Rl),&Some(A),&None) => Ok(vec![0x23]),
             (&Some(Add),&Some(A),&Some(Data(d))) => Ok(vec![0x24,d]),
@@ -140,8 +156,8 @@ impl Instruction {
             (&Some(Add),&Some(A),&Some(R6)) => Ok(vec![0x2E]),
             (&Some(Add),&Some(A),&Some(R7)) => Ok(vec![0x2F]),
 
-            //TODO: code 30
-            //TODO: code 31
+            (&Some(Jnb),&Some(Addr(a)),&Some(Addr16(d))) => Ok(vec![0x30,a,self.short_jmp(d as u16)]),
+            //TODo: code 31
             (&Some(Reti),&None,&None) => Ok(vec![0x32]),
             (&Some(Rlc),&None,&None) => Ok(vec![0x33]),
             (&Some(Addc),&Some(A),&Some(Data(d))) => Ok(vec![0x34,d]),
@@ -157,10 +173,10 @@ impl Instruction {
             (&Some(Addc),&Some(A),&Some(R6)) => Ok(vec![0x3E]),
             (&Some(Addc),&Some(A),&Some(R7)) => Ok(vec![0x3F]),
 
-            //TODO: code 40
-            //TODO: code 41
-            //TODO: code 42
-            //TODO: code 43
+            (&Some(Jc),&Some(Addr16(d)),&None) => Ok(vec![0x40,self.short_jmp(d as u16)]),
+            //TODo: code 41
+            (&Some(Orl),&Some(Addr(a)),&Some(A)) => Ok(vec![0x42,a]),
+            (&Some(Orl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x43,a,d]),
             (&Some(Orl),&Some(A),&Some(Data(d))) => Ok(vec![0x44,d]),
             (&Some(Orl),&Some(A),&Some(Addr(d))) => Ok(vec![0x45,d]),
             (&Some(Orl),&Some(A),&Some(AtR0)) => Ok(vec![0x46]),
@@ -174,10 +190,10 @@ impl Instruction {
             (&Some(Orl),&Some(A),&Some(R6)) => Ok(vec![0x4E]),
             (&Some(Orl),&Some(A),&Some(R7)) => Ok(vec![0x4F]),
 
-            //TODO: code 50
-            //TODO: code 51
-            //TODO: code 52
-            //TODO: code 53
+            (&Some(Jnc),&Some(Addr16(d)),&None) => Ok(vec![0x50,self.short_jmp(d as u16)]),
+            //TODo: code 51
+            (&Some(Anl),&Some(Addr(a)),&Some(A)) => Ok(vec![0x52,a]),
+            (&Some(Anl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x53,a,d]),
             (&Some(Anl),&Some(A),&Some(Data(d))) => Ok(vec![0x54,d]),
             (&Some(Anl),&Some(A),&Some(Addr(d))) => Ok(vec![0x55,d]),
             (&Some(Anl),&Some(A),&Some(AtR0)) => Ok(vec![0x56]),
@@ -191,8 +207,8 @@ impl Instruction {
             (&Some(Anl),&Some(A),&Some(R6)) => Ok(vec![0x5E]),
             (&Some(Anl),&Some(A),&Some(R7)) => Ok(vec![0x5F]),
 
-            //TODO: code 60
-            //TODO: code 61
+            (&Some(Jz),&Some(Addr16(d)),&None) => Ok(vec![0x60,self.short_jmp(d as u16)]),
+            //TODo: code 61
             (&Some(Xrl),&Some(Addr(d)),&Some(A)) => Ok(vec![0x62,d]),
             (&Some(Xrl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x63,a,d]),
             (&Some(Xrl),&Some(A),&Some(Data(d))) => Ok(vec![0x64,d]),
@@ -209,9 +225,9 @@ impl Instruction {
             (&Some(Xrl),&Some(A),&Some(R7)) => Ok(vec![0x6F]),
 
             (&Some(Jnz),&Some(Addr16(d)),&None) => Ok(vec![0x70,self.short_jmp(d as u16)]),
-            //TODO: code 71
+            //TODo: code 71
             (&Some(Orl),&Some(C),&Some(Addr(d))) => Ok(vec![0x72,d]),
-            //TODO: code 73
+            (&Some(Jmp),&Some(AtADptr),&None) => Ok(vec![0x73]),
             (&Some(Mov),&Some(A),&Some(Data(d))) => Ok(vec![0x74,d]),
             (&Some(Mov),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x75,a,d]),
             (&Some(Mov),&Some(AtR0),&Some(Data(d))) => Ok(vec![0x76,d]),
@@ -226,9 +242,9 @@ impl Instruction {
             (&Some(Mov),&Some(R7),&Some(Data(d))) => Ok(vec![0x7F,d]),
 
             (&Some(Sjmp),&Some(Addr(d)),&None) => Ok(vec![0x80,self.short_jmp(d as u16)]),
-            //TODO: code 81
+            //TODo: code 81
             (&Some(Anl),&Some(C),&Some(Addr(d))) => Ok(vec![0x82,d]),
-            //TODO: code 83
+            (&Some(Movc),&Some(A),&Some(AtAPc)) => Ok(vec![0x83]),
             (&Some(Mov),&Some(Data(d)),&Some(A)) => Ok(vec![0x84,d]),
             (&Some(Mov),&Some(Data(d)),&Some(Addr(a))) => Ok(vec![0x85,a,d]),
             (&Some(Mov),&Some(Data(d)),&Some(AtR0)) => Ok(vec![0x86,d]),
@@ -242,10 +258,10 @@ impl Instruction {
             (&Some(Mov),&Some(Data(d)),&Some(R6)) => Ok(vec![0x8E,d]),
             (&Some(Mov),&Some(Data(d)),&Some(R7)) => Ok(vec![0x8F,d]),
 
-            //TODO: code 90
-            //TODO: code 91
+            (&Some(Mov),&Some(Dptr),&Some(Data16(d))) => Ok(vec![0x90,(d/0x100)as u8,(d%0x100) as u8]),
+            //TODo: code 91
             (&Some(Mov),&Some(Addr(d)),&Some(C)) => Ok(vec![0x92,d]),
-            //TODO: code 93
+            (&Some(Movc),&Some(A),&Some(AtADptr)) => Ok(vec![0x93]),
             (&Some(Subb),&Some(A),&Some(Data(d))) => Ok(vec![0x94,d]),
             (&Some(Subb),&Some(A),&Some(Addr(d))) => Ok(vec![0x95,d]),
             (&Some(Subb),&Some(A),&Some(AtR0)) => Ok(vec![0x96]),
@@ -259,11 +275,11 @@ impl Instruction {
             (&Some(Subb),&Some(A),&Some(R6)) => Ok(vec![0x9E]),
             (&Some(Subb),&Some(A),&Some(R7)) => Ok(vec![0x9F]),
 
-            //TODO: code A0
-            //TODO: code A1
+            //TODo: code A0
+            // (&Some(Ajmp),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
             (&Some(Mov),&Some(C),&Some(Addr(d))) => Ok(vec![0xA2,d]),
             (&Some(Inc),&Some(Dptr),&None) => Ok(vec![0xA3]),
-            (&Some(Mov),&Some(A),&Some(Addr(d))) => Ok(vec![0xA4,d]),
+            (&Some(Mul),&Some(AB),&None) => Ok(vec![0xA4]),
             (&Some(Mov),&Some(Addr(a)),&Some(Addr(d))) => Ok(vec![0xA5,a,d]),
             (&Some(Mov),&Some(AtR0),&Some(Addr(d))) => Ok(vec![0xA6,d]),
             (&Some(Mov),&Some(AtR1),&Some(Addr(d))) => Ok(vec![0xA7,d]),
@@ -276,26 +292,69 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Addr(d))) => Ok(vec![0xAE,d]),
             (&Some(Mov),&Some(R7),&Some(Addr(d))) => Ok(vec![0xAF,d]),
 
-            //TODO: code B0
-            //TODO: code B1
+            ///TODo: code B0
+            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
             (&Some(Cpl),&Some(Addr(d)),&None) => Ok(vec![0xB2,d]),
             (&Some(Cpl),&Some(C),&None) => Ok(vec![0xB3]),
             //TODO: codes B4-BF
 
-            //TODO: codes C0-CF
+            (&Some(Push),&Some(Addr(d)),&None) => Ok(vec![0xC0,d]),
+            //TODo: code C1
+            (&Some(Clr),&Some(Addr(d)),&None) => Ok(vec![0xC2,d]),
+            (&Some(Clr),&Some(C),&None) => Ok(vec![0xC3]),
+            (&Some(Swap),&Some(A),&None) => Ok(vec![0xC4]),
+            (&Some(Xch),&Some(A),&Some(Addr(d))) => Ok(vec![0xC5,d]),
+            (&Some(Xch),&Some(A),&Some(AtR0)) => Ok(vec![0xC6]),
+            (&Some(Xch),&Some(A),&Some(AtR1)) => Ok(vec![0xC7]),
+            (&Some(Xch),&Some(A),&Some(R0)) => Ok(vec![0xC8]),
+            (&Some(Xch),&Some(A),&Some(R1)) => Ok(vec![0xC9]),
+            (&Some(Xch),&Some(A),&Some(R2)) => Ok(vec![0xCA]),
+            (&Some(Xch),&Some(A),&Some(R3)) => Ok(vec![0xCB]),
+            (&Some(Xch),&Some(A),&Some(R4)) => Ok(vec![0xCC]),
+            (&Some(Xch),&Some(A),&Some(R5)) => Ok(vec![0xCD]),
+            (&Some(Xch),&Some(A),&Some(R6)) => Ok(vec![0xCE]),
+            (&Some(Xch),&Some(A),&Some(R7)) => Ok(vec![0xCF]),
 
-            //TODO: codes D0-D7
-            (&Some(Djnz),&Some(R0),&Some(Addr(d))) => Ok(vec![0xD8,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R1),&Some(Addr(d))) => Ok(vec![0xD9,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R2),&Some(Addr(d))) => Ok(vec![0xDA,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R3),&Some(Addr(d))) => Ok(vec![0xDB,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R4),&Some(Addr(d))) => Ok(vec![0xDC,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R5),&Some(Addr(d))) => Ok(vec![0xDD,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R6),&Some(Addr(d))) => Ok(vec![0xDE,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R7),&Some(Addr(d))) => Ok(vec![0xDF,self.short_jmp(d as u16)]),
+            (&Some(Pop),&Some(Addr(d)),&None) => Ok(vec![0xD0,d]),
+            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
+            (&Some(Setb),&Some(Addr(d)),&None) => Ok(vec![0xD2,d]),
+            (&Some(Setb),&Some(C),&None) => Ok(vec![0xD3]),
+            (&Some(Da),&Some(A),&None) => Ok(vec![0xD4]),
+            (&Some(Djnz),&Some(Addr(d)),&Some(Addr16(a))) => Ok(vec![0xD5,d,self.short_jmp(a )]),
+            (&Some(Xchd),&Some(A),&Some(AtR0)) => Ok(vec![0xD6]),
+            (&Some(Xchd),&Some(A),&Some(AtR1)) => Ok(vec![0xD7]),
+            (&Some(Djnz),&Some(R0),&Some(Addr16(d))) => Ok(vec![0xD8,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R1),&Some(Addr16(d))) => Ok(vec![0xD9,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R2),&Some(Addr16(d))) => Ok(vec![0xDA,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R3),&Some(Addr16(d))) => Ok(vec![0xDB,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R4),&Some(Addr16(d))) => Ok(vec![0xDC,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R5),&Some(Addr16(d))) => Ok(vec![0xDD,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R6),&Some(Addr16(d))) => Ok(vec![0xDE,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R7),&Some(Addr16(d))) => Ok(vec![0xDF,self.short_jmp(d as u16)]),
 
-            //TODO: Codes E0-F5
+            (&Some(Movx),&Some(A),&Some(AtDptr)) => Ok(vec![0xE0]),
+            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xE1,d as u8]),
+            (&Some(Movx),&Some(A),&Some(AtR0)) => Ok(vec![0xE2]),
+            (&Some(Movx),&Some(A),&Some(AtR1)) => Ok(vec![0xE3]),
+            (&Some(Clr),&Some(A),&None) => Ok(vec![0xE4]),
+            (&Some(Mov),&Some(A),&Some(Addr(d))) => Ok(vec![0xE5,d]),
+            (&Some(Mov),&Some(A),&Some(AtR0)) => Ok(vec![0xE6]),
+            (&Some(Mov),&Some(A),&Some(AtR1)) => Ok(vec![0xE7]),
+            (&Some(Mov),&Some(A),&Some(R0)) => Ok(vec![0xE8]),
+            (&Some(Mov),&Some(A),&Some(R1)) => Ok(vec![0xE9]),
+            (&Some(Mov),&Some(A),&Some(R2)) => Ok(vec![0xEA]),
+            (&Some(Mov),&Some(A),&Some(R3)) => Ok(vec![0xEB]),
+            (&Some(Mov),&Some(A),&Some(R4)) => Ok(vec![0xEC]),
+            (&Some(Mov),&Some(A),&Some(R5)) => Ok(vec![0xED]),
+            (&Some(Mov),&Some(A),&Some(R6)) => Ok(vec![0xEE]),
+            (&Some(Mov),&Some(A),&Some(R7)) => Ok(vec![0xEF]),
 
+            (&Some(Movx),&Some(AtDptr),&Some(A)) => Ok(vec![0xF0]),
+            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xF1,d as u8]),
+            (&Some(Movx),&Some(AtR0),&Some(A)) => Ok(vec![0xF2]),
+            (&Some(Movx),&Some(AtR1),&Some(A)) => Ok(vec![0xF3]),
+            (&Some(Cpl),&Some(A),&None) => Ok(vec![0xF4]),
+            (&Some(Mov),&Some(Addr(d)),&Some(A)) => Ok(vec![0xF5,d]),
             (&Some(Mov),&Some(AtR0),&Some(A)) => Ok(vec![0xF6]),
             (&Some(Mov),&Some(AtR1),&Some(A)) => Ok(vec![0xF7]),
             (&Some(Mov),&Some(R0),&Some(A)) => Ok(vec![0xF8]),
@@ -369,6 +428,15 @@ impl Instruction {
                 "anl" => Some(Anl),
                 "cpl" => Some(Cpl),
                 "ds" => Some(Ds),
+                "swap" => Some(Swap),
+                "push" => Some(Push),
+                "pop" => Some(Pop),
+                "mul" => Some(Mul),
+                "xchd" => Some(Xchd),
+                "da" => Some(Da),
+                "setb" => Some(Setb),
+                "movc" => Some(Movc),
+                "jmp" => Some(Jmp),
                 "end" => None,
                 m @ _ => return Err(format!("unknown mnemonic: line {}: {}",line.num,m)),
             };
@@ -391,6 +459,10 @@ impl Instruction {
                 "r0" => Some(OpType::R0),
                 "c" => Some(OpType::C),
                 "a" => Some(OpType::A),
+                "ab" => Some(OpType::AB),
+                "@dptr" => Some(AtDptr),
+                "@a+dptr" => Some(AtADptr),
+                "@a+pc" => Some(AtAPc),
                 "dptr" => Some(Dptr),
                 "b" =>Some(Label("B".to_string())),
                 op @ _ => {
@@ -421,6 +493,9 @@ impl Instruction {
                 "a" => Some(OpType::A),
                 "b" =>Some(Label("B".to_string())),
                 "dptr" => Some(Dptr),
+                "@a+pc" => Some(AtAPc),
+                "@a+dptr" => Some(AtADptr),
+                "@dptr" => Some(AtDptr),
                 op @ _ => {
                     match other_op(op.to_string()){
                         Ok(op) => Some(op),
@@ -457,6 +532,7 @@ impl Instruction {
                         _ => {},
                     };
                 },
+                Lcall | Ljmp => return 3,
                 _ =>{},
             }
             len +=1;
@@ -464,13 +540,15 @@ impl Instruction {
                 match self.op1.clone().unwrap() {
                     Data(_)| Addr(_)| Addr16(_)=> len+=1,
                     Label(_) => len+=1,
+                    Data16(_) => len+=2,
                     _ => {},
                 };
             }
             if self.op2.is_some() {
                 match self.op2.clone().unwrap() {
-                    Data(_)| Addr(_)=> len+=1,
+                    Data(_)| Addr(_) | Addr16(_)=> len+=1,
                     Label(_) => len+=1,
+                    Data16(_) => len+=2,
                     _ => {},
                 };
             }
@@ -546,12 +624,6 @@ impl Instruction {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        match (&self.op1, &self.op2) {
-            (&Some(Data16(_)), &Some(_)) | (_, &Some(Data16(_))) => {
-                return Err(String::from("There can only be one opperand when one is Data16"))
-            },
-            _ => {}
-        }
         match &self.mnemonic {
             &None => Ok(()),
             &Some(Nop) => {
