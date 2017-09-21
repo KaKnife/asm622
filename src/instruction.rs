@@ -89,6 +89,7 @@ pub struct Instruction {
     mnemonic: Option<Mnemonic>,
     op1: Option<OpType>,
     op2: Option<OpType>,
+    op_ext: Vec<OpType>,
 }
 
 impl Instruction {
@@ -275,7 +276,7 @@ impl Instruction {
             (&Some(Subb),&Some(A),&Some(R6)) => Ok(vec![0x9E]),
             (&Some(Subb),&Some(A),&Some(R7)) => Ok(vec![0x9F]),
 
-            //TODo: code A0
+            //TODO: code A0
             // (&Some(Ajmp),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
             (&Some(Mov),&Some(C),&Some(Addr(d))) => Ok(vec![0xA2,d]),
             (&Some(Inc),&Some(Dptr),&None) => Ok(vec![0xA3]),
@@ -292,7 +293,7 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Addr(d))) => Ok(vec![0xAE,d]),
             (&Some(Mov),&Some(R7),&Some(Addr(d))) => Ok(vec![0xAF,d]),
 
-            ///TODo: code B0
+            ///TODO: code B0
             // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
             (&Some(Cpl),&Some(Addr(d)),&None) => Ok(vec![0xB2,d]),
             (&Some(Cpl),&Some(C),&None) => Ok(vec![0xB3]),
@@ -386,6 +387,7 @@ impl Instruction {
         let mne;
         let op1;
         let op2;
+        let mut op_ext = Vec::new();
 
         if line.mnu.is_some() {
             mne = match line.mnu.unwrap().to_lowercase().as_ref() {
@@ -507,8 +509,39 @@ impl Instruction {
         else {
             op2 = None;
         }
+        if line.ops.len()>2 {
+            for i in 3 .. line.ops.len()
+            {
+                let op_tmp= match line.ops[i].to_lowercase().as_ref() {
+                    "@r0" => OpType::AtR0,
+                    "@r1" => OpType::AtR1,
+                    "r1" => OpType::R1,
+                    "r2" => OpType::R2,
+                    "r3" => OpType::R3,
+                    "r4" => OpType::R4,
+                    "r5" => OpType::R5,
+                    "r6" => OpType::R6,
+                    "r7" => OpType::R7,
+                    "r0" => OpType::R0,
+                    "c" => OpType::C,
+                    "a" => OpType::A,
+                    "b" => Label("B".to_string()),
+                    "dptr" => Dptr,
+                    "@a+pc" =>AtAPc,
+                    "@a+dptr" => AtADptr,
+                    "@dptr" => AtDptr,
+                    op @ _ => {
+                        match other_op(op.to_string()){
+                            Ok(op) => op,
+                            Err(e) => return Err(e),
+                        }
+                    },
+                };
+                op_ext.push(op_tmp);
+            }
+        }
 
-        Ok(Instruction{offset:offset, num: line.num, label:line.label, mnemonic: mne, op1: op1, op2: op2,})
+        Ok(Instruction{offset:offset, num: line.num, label:line.label, mnemonic: mne, op1: op1, op2: op2, op_ext:op_ext})
     }
 
     pub fn offset(&self) ->u16 {

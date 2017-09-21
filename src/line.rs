@@ -68,7 +68,7 @@ pub fn get_lines(file_text: String) -> Vec<Line>{
         if cmd.len() > 0 {
             mnu = Some(cmd[0].to_string());
             if cmd.len() > 1 {
-                for i in 2 .. cmd.len(){
+                for i in 1 .. cmd.len(){
                     ops.push(cmd[i].to_string())
                 }
             }
