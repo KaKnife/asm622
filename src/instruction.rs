@@ -445,8 +445,8 @@ impl Instruction {
             mne = None;
         }
 
-        if line.op1.is_some() {
-            op1 = match line.op1.unwrap().to_lowercase().as_ref() {
+        if line.ops.len()>0 {
+            op1 = match line.ops[0].to_lowercase().as_ref() {
                 "@r0" => Some(OpType::AtR0),
                 "@r1" => Some(OpType::AtR1),
                 "r1" => Some(OpType::R1),
@@ -477,8 +477,8 @@ impl Instruction {
             op1 = None;
         }
 
-        if line.op2.is_some() {
-            op2 = match line.op2.unwrap().to_lowercase().as_ref() {
+        if line.ops.len()>1 {
+            op2 = match line.ops[1].to_lowercase().as_ref() {
                 "@r0" => Some(OpType::AtR0),
                 "@r1" => Some(OpType::AtR1),
                 "r1" => Some(OpType::R1),
