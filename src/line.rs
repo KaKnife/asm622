@@ -42,3 +42,45 @@ impl Display for Line {
         write!(f, "{}", out)
     }
 }
+
+pub fn get_lines(file_text: String) -> Vec<Line>{
+    let mut lines= Vec::new();
+    let read_lines = file_text.lines();
+    let mut i = 1u8;
+    //get each line of the program
+    for mut line in read_lines {
+        let mut mnu = None;
+        let mut op1 = None;
+        let mut op2 = None;
+        let mut label= None;
+        line=line.trim();
+        if line.contains(";"){
+            let tmp: Vec<&str> = line.split(';').collect();
+            line = tmp[0];
+        }
+
+        if line.contains(":"){
+            let tmp: Vec<&str> = line.split(':').collect();
+            label = Some(tmp[0].to_string());
+            line = tmp[1];
+        }
+
+        let mut cmd: Vec<&str> = line.split(|c| c == ' ' || c == ',' || c == ':'|| c == '\t').collect();
+        cmd.retain(|x| x.to_string() != "");
+        if cmd.len() > 0 {
+            mnu = Some(cmd[0].to_string());
+            if cmd.len() > 1 {
+                op1 = Some(cmd[1].to_string());
+                if cmd.len() > 2 {
+                    op2 = Some(cmd[2].to_string());
+                }
+            }
+        }
+        let l = Line::new(i, label, mnu, op1, op2);
+        lines.push(l);
+        //println!("{}",l);
+        i+=1;
+    }
+
+    lines
+}

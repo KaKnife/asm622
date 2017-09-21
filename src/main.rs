@@ -4,24 +4,32 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+mod section;
+mod omf;
 mod line;
 mod instruction;
 mod hex_table;
 use hex_table::HexTable;
-use line::Line;
-use instruction::Instruction;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut lines: Vec<Line> = Vec::new();
-    let mut instructions: Vec<Instruction> = Vec::new();
+    // let mut lines;
     let label_table;
     let mut error = false; //if there is an error in the compulation
-    let mut offset = 0; //the offset counter for instructions
 
     // Create a path to the desired file
     let path = Path::new(&args[1]);
     let display = path.display();
+    let mut out_type = OutType::Bin;
+
+    if args.len() > 2 {
+        let obj_string = args[2].as_ref();
+        match obj_string {
+            "-o" => out_type = OutType::Obj,
+            "-h" => out_type = OutType::Hex,
+            _ => {},
+        }
+    }
 
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&path) {
@@ -35,132 +43,81 @@ fn main() {
     // Read the file contents into a string, returns `io::Result<usize>`
     let mut file_text = String::new();
     file.read_to_string(&mut file_text).unwrap();
-    let read_lines = file_text.lines();
-    let mut i = 1u8;
-    //get each line of the program
-    for mut line in read_lines {
-        let mut mnu = None;
-        let mut op1 = None;
-        let mut op2 = None;
-        let mut label= None;
 
-        if line.contains(";"){
-            let tmp: Vec<&str> = line.split(';').collect();
-            line = tmp[0];
+    let lines = line::get_lines(file_text);
+
+    let sections = match section::get_sections(lines){
+        (s@_,true) => {
+            error =true;
+            s
+        },
+        (s@_,false) => {
+            s
         }
-
-        if line.contains(":"){
-            let tmp: Vec<&str> = line.split(':').collect();
-            label = Some(tmp[0].to_string());
-            line = tmp[1];
-        }
-
-        let mut cmd: Vec<&str> = line.split(|c| c == ' ' || c == ',' || c == ':'|| c == '\t').collect();
-        cmd.retain(|x| x.to_string() != "");
-        if cmd.len() > 0 {
-            mnu = Some(cmd[0].to_string());
-            if cmd.len() > 1 {
-                op1 = Some(cmd[1].to_string());
-                if cmd.len() > 2 {
-                    op2 = Some(cmd[2].to_string());
-                }
-            }
-        }
-        let l = Line::new(i, label, mnu, op1, op2);
-        lines.push(l);
-        //println!("{}",l);
-        i+=1;
-    }
-
-
-    //get the instructions from each line
-    for line in lines {
-        // println!("{}", line );
-        let ins =  match Instruction::from_line(line,offset){
-            Ok(i) => i,
-            Err(e) => {
-                println!("Error: {}", e);
-                error = true;
-                continue;
-            }
-        };
-        offset =(offset as i32 +ins.len() as i32)as u16;
-        // print!("{}", ins);
-        instructions.push(ins);
-    }
-
+    };
     // Generate a table of all known labels
-    label_table = build_label_table(&instructions);
+    label_table = build_label_table(&sections);
 
-    // //print the label table
-    // for label in &label_table {
-    //     println!("{}:{}",label.1,label.0)
-    // }
-
-
-    let mut hex_table = HexTable::new(&instructions);
+    // println!("{:?}",label_table);
+    // let mut hex_table = HexTable::new(&sections);
 
     // Update lables and add instructions to hex file;
-    for mut instruction in instructions {
-        match instruction.fix_label(&label_table) {
-            Ok(()) =>{},
-            Err(e) => {
-                println!("Error: {}", e);
-                error = true;
-                continue;
-            }
-        };
+    // for mut instruction in instructions {
+    //     match instruction.fix_label(&label_table) {
+    //         Ok(()) =>{},
+    //         Err(e) => {
+    //             println!("Error: {}", e);
+    //             error = true;
+    //             continue;
+    //         }
+    //     };
+    //     if !error {
+    //         let hex = match instruction.to_hex(){
+    //             Ok(h) => h,
+    //             Err(e) => {
+    //                 println!("Error: {}", e);
+    //                 error = true;
+    //                 continue;
+    //             }
+    //         };
+    //         hex_table.update(instruction.offset(), &hex);
+    //     }
+    // }
+    let mut records: Vec<omf::ContentRecord> = Vec::new();
+    for mut sec in sections {
+        if sec.fix_labels(&label_table) {
+            error = true;
+        }
         if !error {
-            let hex = match instruction.to_hex(){
-                Ok(h) => h,
-                Err(e) => {
-                    println!("Error: {}", e);
-                    error = true;
-                    continue;
-                }
-            };
-            hex_table.update(instruction.offset(), &hex);
+            let record = sec.get_content_record();
+            records.push(record);
+        }
+    }
+
+    if !error{
+        let name = String::from(path.file_stem().unwrap().to_str().unwrap());
+
+        match out_type {
+            OutType::Bin => output_bin(name, records),
+            OutType::Obj => output_obj(name, records),
+            OutType::Hex => output_hex(name, records),
         }
     }
 
     // output the result to a hex file if no errors
-    if !error {
-        let name = path.file_stem().unwrap().to_str().unwrap();
-        let ext = ".hex";
-        let file_name = &([name, ext].join(""));
-        let path = Path::new(file_name);
-        let display = path.display();
 
-        let mut file = match File::create(&path) {
-            Err(why) => panic!("couldn't create {}: {}",
-            display,
-            why.description()),
-            Ok(file) => file,
-        };
 
-        // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
-
-        match file.write_all(&hex_table.table) {
-            Err(why) => {
-                panic!("couldn't write to {}: {}", display,
-                why.description())
-            },
-            Ok(_) => println!("successfully assembled to {}", display),
-        }
-    }
     else {
         println!("Failed to build {}", path.display());
     }
 
 }
 
-fn build_label_table(instrucions:& Vec<Instruction>) -> Vec<(String, u16)> {
-    let mut table: Vec<(String, u16)> = Vec::new();
-    let mut label_instructions = instrucions.clone();
-    label_instructions.retain(|x| x.label.is_some());
-    for label in label_instructions {
-        let offset = label.offset();
-        table.push((label.label.unwrap().to_lowercase(),offset));
+fn build_label_table(sections: &Vec<section::Section>) -> Vec<(String, u16)>{
+    let mut table = Vec::new();
+    for sec in sections {
+        let mut  sub_table = sec.build_label_table();
+        table.append(&mut sub_table);
     }
     //built in labels
 
@@ -262,4 +219,131 @@ fn build_label_table(instrucions:& Vec<Instruction>) -> Vec<(String, u16)> {
     table.push(("WFEED2".to_string(),0xC3));
     table.push(("IP0H".to_string(),0xB7));
     table
+}
+
+enum OutType {
+    Bin,
+    Obj,
+    Hex,
+}
+
+fn output_bin(name:String, records:Vec<omf::ContentRecord>) {
+    let mut hex_table = HexTable::new_empty();
+    for record in records {
+        hex_table.append_content(record);
+    }
+
+
+    let ext = ".bin";
+    let file_name = &([&name, ext].join(""));
+    let path = Path::new(file_name);
+    let display = path.display();
+
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}",
+        display,
+        why.description()),
+        Ok(file) => file,
+    };
+
+    // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
+
+    match file.write_all(&hex_table.table) {
+        Err(why) => {
+            panic!("couldn't write to {}: {}", display,
+            why.description())
+        },
+        Ok(_) => println!("successfully assembled to {}", display),
+    }
+
+}
+
+fn checksome(vec: &Vec<u8>)->u8{
+    let mut sum = 0u64;
+    for v in vec {
+        sum+=*v as u64;
+    }
+    let mut sum8 = (sum%256) as u8;
+    sum8 ^= 0xFF;
+    if sum8 == 0xFF{
+        return 0;
+    }
+    sum8+1
+}
+
+fn output_hex(name:String, records:Vec<omf::ContentRecord>) {
+
+
+
+    let ext = ".hex";
+    let file_name = &([&name, ext].join(""));
+    let path = Path::new(file_name);
+    let display = path.display();
+
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}",
+        display,
+        why.description()),
+        Ok(file) => file,
+    };
+
+    // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
+    let mut out = String::new();
+    for record in records {
+        if record.data().len()>0{
+            let mut line_out_hex = Vec::new();
+            line_out_hex.push(record.data().len() as u8);
+            line_out_hex.push((record.offset()/0xFF )as u8);
+            line_out_hex.push((record.offset()%0xFF) as u8);
+            line_out_hex.push(00);
+            line_out_hex.append(&mut record.data());
+            let chk_some = checksome(&line_out_hex);
+            line_out_hex.push(chk_some);
+            let mut line_out = String::from(":");
+            for h in line_out_hex{
+                line_out+=&format!("{:02x}", h);
+            }
+            write!(file, "{}\n", line_out.to_uppercase());
+            out+=&line_out;
+        }
+
+    }
+    write!(file, ":00000001FF\n");
+
+    println!("successfully assembled to {}", display);
+
+}
+
+fn output_obj(name: String, records:Vec<omf::ContentRecord>) {
+    let mut hex_table = HexTable::new_empty();
+    let header = omf::HeaderRecord::new(name.clone().to_uppercase());
+    let end = omf::EndRecord::new(name.clone().to_uppercase(), (true,false,false,false));
+    hex_table.append_record(header);
+    for record in records {
+        hex_table.append_record(record);
+    }
+    hex_table.append_record(end);
+
+
+    let ext = ".obj";
+    let file_name = &([&name, ext].join(""));
+    let path = Path::new(file_name);
+    let display = path.display();
+
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}",
+        display,
+        why.description()),
+        Ok(file) => file,
+    };
+
+    // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
+
+    match file.write_all(&hex_table.table) {
+        Err(why) => {
+            panic!("couldn't write to {}: {}", display,
+            why.description())
+        },
+        Ok(_) => println!("successfully assembled to {}", display),
+    }
 }

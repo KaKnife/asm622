@@ -1,3 +1,7 @@
 target/
 *.asm*
 *.hex
+*.lst
+*.bin
+*.omf
+*.obj

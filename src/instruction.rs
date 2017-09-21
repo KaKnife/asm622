@@ -30,6 +30,7 @@ enum Mnemonic {
     Cpl,
     Db,
     Cseg,
+    Dseg,
     Org,
     Nop,
     Ajmp,
@@ -67,7 +68,7 @@ enum Mnemonic {
     Ds,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Instruction {
     offset:u16 ,
     num: u8,
@@ -78,7 +79,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    pub fn short_jmp(&self, addr: u8) -> u8 {
+    fn short_jmp(&self, addr: u16) -> u8 {
         ((addr as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8
     }
 
@@ -105,7 +106,7 @@ impl Instruction {
             (&Some(Inc),&Some(R6),&None) => Ok(vec![0x0E]),
             (&Some(Inc),&Some(R7),&None) => Ok(vec![0x0F]),
 
-            (&Some(Jbc),&Some(Addr(b)),&Some(Addr(d))) => Ok(vec![0x10,b,self.short_jmp(d)]),
+            (&Some(Jbc),&Some(Addr(b)),&Some(Addr(d))) => Ok(vec![0x10,b,self.short_jmp(d as u16)]),
             //TODO: code 11
             //TODO: code 12
             (&Some(Rrc),&Some(A),&None) => Ok(vec![0x13]),
@@ -207,7 +208,7 @@ impl Instruction {
             (&Some(Xrl),&Some(A),&Some(R6)) => Ok(vec![0x6E]),
             (&Some(Xrl),&Some(A),&Some(R7)) => Ok(vec![0x6F]),
 
-            //TODO: code 70
+            (&Some(Jnz),&Some(Addr16(d)),&None) => Ok(vec![0x70,self.short_jmp(d as u16)]),
             //TODO: code 71
             (&Some(Orl),&Some(C),&Some(Addr(d))) => Ok(vec![0x72,d]),
             //TODO: code 73
@@ -224,7 +225,7 @@ impl Instruction {
             (&Some(Mov),&Some(R6),&Some(Data(d))) => Ok(vec![0x7E,d]),
             (&Some(Mov),&Some(R7),&Some(Data(d))) => Ok(vec![0x7F,d]),
 
-            (&Some(Sjmp),&Some(Addr(d)),&None) => Ok(vec![0x80,self.short_jmp(d)]),
+            (&Some(Sjmp),&Some(Addr(d)),&None) => Ok(vec![0x80,self.short_jmp(d as u16)]),
             //TODO: code 81
             (&Some(Anl),&Some(C),&Some(Addr(d))) => Ok(vec![0x82,d]),
             //TODO: code 83
@@ -284,14 +285,14 @@ impl Instruction {
             //TODO: codes C0-CF
 
             //TODO: codes D0-D7
-            (&Some(Djnz),&Some(R0),&Some(Addr(d))) => Ok(vec![0xD8,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R1),&Some(Addr(d))) => Ok(vec![0xD9,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R2),&Some(Addr(d))) => Ok(vec![0xDA,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R3),&Some(Addr(d))) => Ok(vec![0xDB,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R4),&Some(Addr(d))) => Ok(vec![0xDC,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R5),&Some(Addr(d))) => Ok(vec![0xDD,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R6),&Some(Addr(d))) => Ok(vec![0xDE,self.short_jmp(d)]),
-            (&Some(Djnz),&Some(R7),&Some(Addr(d))) => Ok(vec![0xDF,self.short_jmp(d)]),
+            (&Some(Djnz),&Some(R0),&Some(Addr(d))) => Ok(vec![0xD8,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R1),&Some(Addr(d))) => Ok(vec![0xD9,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R2),&Some(Addr(d))) => Ok(vec![0xDA,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R3),&Some(Addr(d))) => Ok(vec![0xDB,self.short_jmp(d  as u16)]),
+            (&Some(Djnz),&Some(R4),&Some(Addr(d))) => Ok(vec![0xDC,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R5),&Some(Addr(d))) => Ok(vec![0xDD,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R6),&Some(Addr(d))) => Ok(vec![0xDE,self.short_jmp(d as u16)]),
+            (&Some(Djnz),&Some(R7),&Some(Addr(d))) => Ok(vec![0xDF,self.short_jmp(d as u16)]),
 
             //TODO: Codes E0-F5
 
@@ -308,6 +309,7 @@ impl Instruction {
 
             (&Some(Org),_,_) => Ok(vec![]),
             (&Some(Cseg),_,_) => Ok(vec![]),
+            (&Some(Dseg),_,_) => Ok(vec![]),
             (&Some(Db), &Some(Label(ref l)), &None) => {
                 let mut v = l.clone().into_bytes();
                 v.remove(l.len()-1);
@@ -333,7 +335,8 @@ impl Instruction {
                 "sjmp" => Some(Mnemonic::Sjmp),
                 "add" => Some(Mnemonic::Add),
                 "org" => Some(Mnemonic::Org),
-                "cseg" | "dseg" => Some(Cseg),
+                "cseg" => Some(Cseg),
+                "dseg" => Some(Dseg),
                 "nop" => Some(Nop),
                 "ajmp" => Some(Ajmp),
                 "ljmp" => Some(Ljmp),
@@ -437,25 +440,11 @@ impl Instruction {
         self.offset
     }
 
-    #[allow(unused_variables)]
     pub fn len(&self) ->i32 {
         let mut len = 0;
         if self.mnemonic.is_some() {
             match self.mnemonic.clone().unwrap(){
-                Org => {
-                    match self.op1.clone().unwrap() {
-                        Data(d)| Addr(d) => return d as i32 - self.offset as i32,
-                        Addr16(d)=> return d as i32 - self.offset as i32,
-                        _ => {},
-                    };
-                },
-                Cseg => {
-                    match self.op2.clone().unwrap() {
-                        Data(d)| Addr(d) => return d as i32 - self.offset as i32,
-                        Addr16(d)=> return d as i32 - self.offset as i32,
-                        _ => {},
-                    };
-                },
+                Org |Cseg | Dseg=> return 0,
                 Db => {
                     match self.op1.clone().unwrap() {
                         Label(l)=> return l.len() as i32,
@@ -473,15 +462,15 @@ impl Instruction {
             len +=1;
             if self.op1.is_some() {
                 match self.op1.clone().unwrap() {
-                    Data(d)| Addr(d)=> len+=1,
-                    Label(d) => len+=1,
+                    Data(_)| Addr(_)| Addr16(_)=> len+=1,
+                    Label(_) => len+=1,
                     _ => {},
                 };
             }
             if self.op2.is_some() {
                 match self.op2.clone().unwrap() {
-                    Data(d)| Addr(d)=> len+=1,
-                    Label(d) => len+=1,
+                    Data(_)| Addr(_)=> len+=1,
+                    Label(_) => len+=1,
                     _ => {},
                 };
             }
@@ -504,21 +493,24 @@ impl Instruction {
             let op = self.op1.clone();
             match op.unwrap() {
                 OpType::Label(label_full) => {
-                    let split: Vec<&str> = label_full.split('.').collect();
-                    let label = split[0];
-                    let index = label_table.iter().position(|x| x.0.to_lowercase() == label);
-                    if index.is_none(){
-                        return Err(format!("Could not find label: line {}: {}",self.num,label));
+                    if label_full.to_lowercase() != "at"
+                    {
+                        let split: Vec<&str> = label_full.split('.').collect();
+                        let label = split[0];
+                        let index = label_table.iter().position(|x| x.0.to_lowercase() == label);
+                        if index.is_none(){
+                            return Err(format!("Could not find label: line {}: {}",self.num,label));
+                        }
+                        let addr = label_table[index.unwrap()].1;
+                        let mut add = 0;
+                        if split.len()>1 {
+                            add = match u8::from_str_radix(split[1], 16){
+                                Ok(a) => a,
+                                Err(_) => 0,
+                            };
+                        }
+                        self.op1 = Some(OpType::Addr16(addr+add as u16));
                     }
-                    let addr = label_table[index.unwrap()].1;
-                    let mut add = 0;
-                    if split.len()>1 {
-                        add = match u8::from_str_radix(split[1], 16){
-                            Ok(a) => a,
-                            Err(_) => 0,
-                        };
-                    }
-                    self.op1 = Some(OpType::Addr16(addr+add as u16));
                 },
                 _=>{},
             }
@@ -572,6 +564,28 @@ impl Instruction {
             _ => Ok(()),
         }
     }
+
+    pub fn is_new_section(&self) -> Option<u16> {
+        let is_new = match self.mnemonic {
+            Some(Org) | Some(Cseg) | Some(Dseg) => true,
+            _ => false,
+        };
+        if !is_new{
+            return None;
+        }
+        match &self.op1 {
+            &Some(Addr(d)) => Some(d as u16),
+            &Some(Addr16(d)) => Some(d),
+            &Some(Label(_)) => {
+                match &self.op2 {
+                    &Some(Addr(d)) => Some(d as u16),
+                    &Some(Addr16(d)) => Some(d),
+                    _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
+                }
+            },
+            _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
+        }
+    }
 }
 
 fn other_op(mut op: String) -> Result<OpType, String> {
@@ -581,7 +595,7 @@ fn other_op(mut op: String) -> Result<OpType, String> {
         if op.ends_with("h") {
             let len = op.len();
             op.remove(len -1);
-             match u8::from_str_radix(&op, 16){
+            match u8::from_str_radix(&op, 16){
                 Ok(d) => return Ok(Data(d)),
                 Err(_) => {},
             };

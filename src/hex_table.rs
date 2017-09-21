@@ -1,4 +1,6 @@
 use instruction::Instruction;
+use omf::Record;
+use omf::ContentRecord;
 
 pub struct HexTable {
     pub table: Vec<u8>,
@@ -15,12 +17,24 @@ impl HexTable {
         let table =  vec![0u8; max as usize];
         HexTable{table:table}
     }
+    pub fn new_empty()-> HexTable{
+        HexTable{table:Vec::new()}
+    }
     pub fn update(&mut self, offset:u16, hex:&Vec<u8>) {
         for i in 0..(hex.len()) {
             self.table[offset as usize+i] = hex[i];
         }
     }
+
+    pub fn append_record<T> (&mut self, record:T) where T:Record{
+        self.table.append(&mut record.hex());
+    }
+
+    pub fn append_content (&mut self, record:ContentRecord) {
+        self.table.append(&mut record.data());
+    }
 }
+
 
 use std::fmt::Display;
 impl Display for HexTable {
