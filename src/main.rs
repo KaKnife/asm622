@@ -15,7 +15,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     // let mut lines;
     let label_table;
-    let mut error = false; //if there is an error in the compulation
+    let mut errors = Vec::new(); //if there is an error in the compulation
 
     // Create a path to the desired file
     let path = Path::new(&args[1]);
@@ -46,55 +46,42 @@ fn main() {
 
     let lines = line::get_lines(file_text);
 
-    let sections = match section::get_sections(lines){
-        (s@_,true) => {
-            error =true;
-            s
-        },
-        (s@_,false) => {
-            s
+    let sections;
+    match section::get_sections(lines){
+        Ok(s) => sections = s,
+        Err(e) => {
+            for err in e {
+                println!("{}",err);
+            }
+            return;
         }
     };
+
+
+
     // Generate a table of all known labels
     label_table = build_label_table(&sections);
 
-    // println!("{:?}",label_table);
-    // let mut hex_table = HexTable::new(&sections);
-
-    // Update lables and add instructions to hex file;
-    // for mut instruction in instructions {
-    //     match instruction.fix_label(&label_table) {
-    //         Ok(()) =>{},
-    //         Err(e) => {
-    //             println!("Error: {}", e);
-    //             error = true;
-    //             continue;
-    //         }
-    //     };
-    //     if !error {
-    //         let hex = match instruction.to_hex(){
-    //             Ok(h) => h,
-    //             Err(e) => {
-    //                 println!("Error: {}", e);
-    //                 error = true;
-    //                 continue;
-    //             }
-    //         };
-    //         hex_table.update(instruction.offset(), &hex);
-    //     }
-    // }
     let mut records: Vec<omf::ContentRecord> = Vec::new();
     for mut sec in sections {
-        if sec.fix_labels(&label_table) {
-            error = true;
+        match sec.fix_labels(&label_table) {
+            Err(mut e) => errors.append(&mut e),
+            _ => {},
         }
-        if !error {
-            let record = sec.get_content_record();
+        if errors.is_empty() {
+            let record;
+            match sec.get_content_record(){
+                Ok(r) => record = r,
+                Err(mut e) => {
+                    errors.append(&mut e);
+                    continue;
+                }
+            }
             records.push(record);
         }
     }
 
-    if !error{
+    if errors.is_empty(){
         let name = String::from(path.file_stem().unwrap().to_str().unwrap());
 
         match out_type {
@@ -103,11 +90,10 @@ fn main() {
             OutType::Hex => output_hex(name, records),
         }
     }
-
-    // output the result to a hex file if no errors
-
-
     else {
+        for e in errors{
+            println!("{}", e);
+        }
         println!("Failed to build {}", path.display());
     }
 
@@ -307,14 +293,22 @@ fn output_hex(name:String, records:Vec<omf::ContentRecord>) {
                     end = record.data().len();
                 }
                 temp_vec.extend_from_slice(&record.data()[0x10*i .. end]);
+                if temp_vec.len() == 0 {
+                    continue;
+                }
                 line_out_hex.append(&mut temp_vec);
                 let chk_some = checksome(&line_out_hex);
                 line_out_hex.push(chk_some);
+
+
                 let mut line_out = String::from(":");
                 for h in line_out_hex{
                     line_out+=&format!("{:02x}", h);
+
                 }
                 write!(file, "{}\n", line_out.to_uppercase()).unwrap();
+
+
             }
 
         }

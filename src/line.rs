@@ -4,11 +4,11 @@ pub struct Line {
     pub label: Option<String>,
     pub mnu: Option<String>,
     pub ops: Vec<String>,
-    pub num: u8,
+    pub num: u64,
 }
 
 impl Line {
-    pub fn new(num: u8, label: Option<String>, mnu: Option<String>, ops: Vec<String>, ) -> Line {
+    pub fn new(num: u64, label: Option<String>, mnu: Option<String>, ops: Vec<String>, ) -> Line {
         Line{
             label:label,
             mnu:mnu,
@@ -44,7 +44,7 @@ impl Line {
 pub fn get_lines(file_text: String) -> Vec<Line>{
     let mut lines= Vec::new();
     let read_lines = file_text.lines();
-    let mut i = 1u8;
+    let mut line_num = 1u64;
     //get each line of the program
     for mut line in read_lines {
         let mut mnu = None;
@@ -73,10 +73,10 @@ pub fn get_lines(file_text: String) -> Vec<Line>{
                 }
             }
         }
-        let l = Line::new(i, label, mnu, ops);
+        let l = Line::new(line_num, label, mnu, ops);
         lines.push(l);
         //println!("{}",l);
-        i+=1;
+        line_num+=1;
     }
 
     lines

@@ -1,9 +1,9 @@
 use line::Line;
-use std::fmt::Display;
 use self::Mnemonic::*;
 use self::OpType::*;
+use std::ops::Index;
 
-#[derive(Debug, Clone,PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum OpType {
     A,
     R0,
@@ -31,6 +31,7 @@ enum OpType {
 
 #[derive(Debug, Clone)]
 enum Mnemonic {
+    Div,
     Jmp,
     Setb,
     Da,
@@ -84,313 +85,115 @@ enum Mnemonic {
 #[derive(Clone, Debug)]
 pub struct Instruction {
     offset:u16 ,
-    num: u8,
+    num: u64,
     pub label: Option<String>,
     mnemonic: Option<Mnemonic>,
-    op1: Option<OpType>,
-    op2: Option<OpType>,
-    op_ext: Vec<OpType>,
+    ops: Vec<OpType>,
 }
 
 impl Instruction {
-    fn short_jmp(&self, addr: u16) -> u8 {
-        // println!("{}", addr );
-        // println!("{}", self.offset);
-        // println!("{}", self.len());
-        ((addr as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8
+    fn short_jmp(&self, addr: u16) -> Result<u8, String> {
+        // println!("{:x}", addr+0x7d );
+        // println!("{:x}", self.offset+self.len() as u16);
+        // println!("{:x}", (addr as i32-(self.offset as i32+self.len() as i32)));
+        if addr as u64+0x7F <  self.offset as u64+self.len() as u64{
+            return Err(format!("Address out of range at {}",self.num));
+
+        }
+        Ok(((addr as u16+0x100-(self.offset as u16+self.len() as u16))%0x100)as u8)
     }
 
     pub fn to_hex(&self) -> Result<Vec<u8>, String> {
-        match self.validate() {
-            Ok(()) => {},
-            Err(e) => return Err(e),
+        match &self.mnemonic {
+            &Some(Div) => self.div(),
+            &Some(Mov) => self.mov(),
+            &Some(Movc) => self.movc(),
+            &Some(Movx) => self.movx(),
+            &Some(Inc) => self.inc(),
+            &Some(Dec) => self.dec(),
+            &Some(Cpl) => self.cpl(),
+            &Some(Cjne) => self.cjne(),
+            &Some(Pop) => self.pop(),
+            &Some(Push) => self.push(),
+            &Some(Add) => self.add(),
+            &Some(Addc) => self.addc(),
+            &Some(Orl) => self.orl(),
+            &Some(Anl) => self.anl(),
+            &Some(Subb) => self.subb(),
+            &Some(Xch) => self.xch(),
+            &Some(Xrl) => self.xrl(),
+            &Some(Jb) => self.jb(),
+            &Some(Ret) => self.ret(),
+            &Some(Clr) => self.clr(),
+            &Some(Setb) => self.setb(),
+            &Some(Nop) => self.nop(),
+            &Some(Djnz) => self.djnz(),
+            &Some(Ajmp) => self.ajmp(),
+            &Some(Ljmp)=> self.ljmp(),
+            &Some(Acall) => self.acall(),
+            &Some(Lcall)=> self.lcall(),
+            &Some(Rr) => self.rr(),
+            &Some(Rrc) => self.rrc(),
+            &Some(Rl) => self.rl(),
+            &Some(Reti) => self.reti(),
+            &Some(Rlc) => self.rlc(),
+            &Some(Jc) => self.jc(),
+
+            &Some(Jnc)=> self.jnc(),
+            &Some(Jz) => self.jz(),
+            &Some(Jnz) => self.jnz(),
+            &Some(Jmp) => self.jmp(),
+            &Some(Mul) => self.mul(),
+            &Some(Swap) => self.swap(),
+            &Some(Da) => self.da(),
+            &Some(Jnb) => self.jnb(),
+            &Some(Jbc) => self.jbc(),
+            &Some(Xchd) => self.xchd(),
+            &Some(Org) => Ok(vec![]),
+            &Some(Cseg)=> Ok(vec![]),
+            &Some(Dseg) => Ok(vec![]),
+            &Some(Db) => self.db(),
+            &Some(Ds)=> self.ds(),
+            &Some(Sjmp)=>self.sjmp(),
+            &None => Ok(vec![]),
+            //&Some(ref a) => Err(format!("Unimplemented: {:?}", a)),
         }
-        match (&self.mnemonic, & self.op1, & self.op2) {
-            (&Some(Nop),&None,&None) => Ok(vec![0x00]),
-            (&Some(Ajmp),&Some(Addr16(d)),&None) => Ok(vec![0x01,d as u8]),
-            (&Some(Ljmp),&Some(Addr16(d)),&None) => Ok(vec![0x02,(d/0x100)as u8,(d%0x100) as u8]),
-            (&Some(Rr),&Some(A),&None) => Ok(vec![0x03]),
-            (&Some(Inc),&Some(A),&None) => Ok(vec![0x04]),
-            (&Some(Inc),&Some(Data(d)),&None) => Ok(vec![0x05,d]),
-            (&Some(Inc),&Some(AtR0),&None) => Ok(vec![0x06]),
-            (&Some(Inc),&Some(AtR1),&None) => Ok(vec![0x07]),
-            (&Some(Inc),&Some(R0),&None) => Ok(vec![0x08]),
-            (&Some(Inc),&Some(R1),&None) => Ok(vec![0x09]),
-            (&Some(Inc),&Some(R2),&None) => Ok(vec![0x0A]),
-            (&Some(Inc),&Some(R3),&None) => Ok(vec![0x0B]),
-            (&Some(Inc),&Some(R4),&None) => Ok(vec![0x0C]),
-            (&Some(Inc),&Some(R5),&None) => Ok(vec![0x0D]),
-            (&Some(Inc),&Some(R6),&None) => Ok(vec![0x0E]),
-            (&Some(Inc),&Some(R7),&None) => Ok(vec![0x0F]),
+    }
 
-            (&Some(Jbc),&Some(Addr(b)),&Some(Addr16(d))) => Ok(vec![0x10,b,self.short_jmp(d as u16)]),
-            (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0x11,d as u8]),
-            (&Some(Lcall),&Some(Addr16(d)),&None) => Ok(vec![0x12,(d/0x100)as u8,(d%0x100) as u8]),
-            (&Some(Rrc),&Some(A),&None) => Ok(vec![0x13]),
-            (&Some(Dec),&Some(A),&None) => Ok(vec![0x14]),
-            (&Some(Dec),&Some(Addr(d)),&None) => Ok(vec![0x15,d]),
-            (&Some(Dec),&Some(AtR0),&None) => Ok(vec![0x16]),
-            (&Some(Dec),&Some(AtR1),&None) => Ok(vec![0x17]),
-            (&Some(Dec),&Some(R0),&None) => Ok(vec![0x18]),
-            (&Some(Dec),&Some(R1),&None) => Ok(vec![0x19]),
-            (&Some(Dec),&Some(R2),&None) => Ok(vec![0x1A]),
-            (&Some(Dec),&Some(R3),&None) => Ok(vec![0x1B]),
-            (&Some(Dec),&Some(R4),&None) => Ok(vec![0x1C]),
-            (&Some(Dec),&Some(R5),&None) => Ok(vec![0x1D]),
-            (&Some(Dec),&Some(R6),&None) => Ok(vec![0x1E]),
-            (&Some(Dec),&Some(R7),&None) => Ok(vec![0x1F]),
-
-            (&Some(Jb),&Some(Addr(a)),&Some(Addr16(d))) => Ok(vec![0x20,a,self.short_jmp(d as u16)]),
-            //TODo: code 21
-            (&Some(Ret),&None,&None) => Ok(vec![0x22]),
-            (&Some(Rl),&Some(A),&None) => Ok(vec![0x23]),
-            (&Some(Add),&Some(A),&Some(Data(d))) => Ok(vec![0x24,d]),
-            (&Some(Add),&Some(A),&Some(Addr(d))) => Ok(vec![0x25,d]),
-            (&Some(Add),&Some(A),&Some(AtR0)) => Ok(vec![0x26]),
-            (&Some(Add),&Some(A),&Some(AtR1)) => Ok(vec![0x27]),
-            (&Some(Add),&Some(A),&Some(R0)) => Ok(vec![0x28]),
-            (&Some(Add),&Some(A),&Some(R1)) => Ok(vec![0x29]),
-            (&Some(Add),&Some(A),&Some(R2)) => Ok(vec![0x2A]),
-            (&Some(Add),&Some(A),&Some(R3)) => Ok(vec![0x2B]),
-            (&Some(Add),&Some(A),&Some(R4)) => Ok(vec![0x2C]),
-            (&Some(Add),&Some(A),&Some(R5)) => Ok(vec![0x2D]),
-            (&Some(Add),&Some(A),&Some(R6)) => Ok(vec![0x2E]),
-            (&Some(Add),&Some(A),&Some(R7)) => Ok(vec![0x2F]),
-
-            (&Some(Jnb),&Some(Addr(a)),&Some(Addr16(d))) => Ok(vec![0x30,a,self.short_jmp(d as u16)]),
-            //TODo: code 31
-            (&Some(Reti),&None,&None) => Ok(vec![0x32]),
-            (&Some(Rlc),&None,&None) => Ok(vec![0x33]),
-            (&Some(Addc),&Some(A),&Some(Data(d))) => Ok(vec![0x34,d]),
-            (&Some(Addc),&Some(A),&Some(Addr(d))) => Ok(vec![0x35,d]),
-            (&Some(Addc),&Some(A),&Some(AtR0)) => Ok(vec![0x36]),
-            (&Some(Addc),&Some(A),&Some(AtR1)) => Ok(vec![0x37]),
-            (&Some(Addc),&Some(A),&Some(R0)) => Ok(vec![0x38]),
-            (&Some(Addc),&Some(A),&Some(R1)) => Ok(vec![0x39]),
-            (&Some(Addc),&Some(A),&Some(R2)) => Ok(vec![0x3A]),
-            (&Some(Addc),&Some(A),&Some(R3)) => Ok(vec![0x3B]),
-            (&Some(Addc),&Some(A),&Some(R4)) => Ok(vec![0x3C]),
-            (&Some(Addc),&Some(A),&Some(R5)) => Ok(vec![0x3D]),
-            (&Some(Addc),&Some(A),&Some(R6)) => Ok(vec![0x3E]),
-            (&Some(Addc),&Some(A),&Some(R7)) => Ok(vec![0x3F]),
-
-            (&Some(Jc),&Some(Addr16(d)),&None) => Ok(vec![0x40,self.short_jmp(d as u16)]),
-            //TODo: code 41
-            (&Some(Orl),&Some(Addr(a)),&Some(A)) => Ok(vec![0x42,a]),
-            (&Some(Orl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x43,a,d]),
-            (&Some(Orl),&Some(A),&Some(Data(d))) => Ok(vec![0x44,d]),
-            (&Some(Orl),&Some(A),&Some(Addr(d))) => Ok(vec![0x45,d]),
-            (&Some(Orl),&Some(A),&Some(AtR0)) => Ok(vec![0x46]),
-            (&Some(Orl),&Some(A),&Some(AtR1)) => Ok(vec![0x47]),
-            (&Some(Orl),&Some(A),&Some(R0)) => Ok(vec![0x48]),
-            (&Some(Orl),&Some(A),&Some(R1)) => Ok(vec![0x49]),
-            (&Some(Orl),&Some(A),&Some(R2)) => Ok(vec![0x4A]),
-            (&Some(Orl),&Some(A),&Some(R3)) => Ok(vec![0x4B]),
-            (&Some(Orl),&Some(A),&Some(R4)) => Ok(vec![0x4C]),
-            (&Some(Orl),&Some(A),&Some(R5)) => Ok(vec![0x4D]),
-            (&Some(Orl),&Some(A),&Some(R6)) => Ok(vec![0x4E]),
-            (&Some(Orl),&Some(A),&Some(R7)) => Ok(vec![0x4F]),
-
-            (&Some(Jnc),&Some(Addr16(d)),&None) => Ok(vec![0x50,self.short_jmp(d as u16)]),
-            //TODo: code 51
-            (&Some(Anl),&Some(Addr(a)),&Some(A)) => Ok(vec![0x52,a]),
-            (&Some(Anl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x53,a,d]),
-            (&Some(Anl),&Some(A),&Some(Data(d))) => Ok(vec![0x54,d]),
-            (&Some(Anl),&Some(A),&Some(Addr(d))) => Ok(vec![0x55,d]),
-            (&Some(Anl),&Some(A),&Some(AtR0)) => Ok(vec![0x56]),
-            (&Some(Anl),&Some(A),&Some(AtR1)) => Ok(vec![0x57]),
-            (&Some(Anl),&Some(A),&Some(R0)) => Ok(vec![0x58]),
-            (&Some(Anl),&Some(A),&Some(R1)) => Ok(vec![0x59]),
-            (&Some(Anl),&Some(A),&Some(R2)) => Ok(vec![0x5A]),
-            (&Some(Anl),&Some(A),&Some(R3)) => Ok(vec![0x5B]),
-            (&Some(Anl),&Some(A),&Some(R4)) => Ok(vec![0x5C]),
-            (&Some(Anl),&Some(A),&Some(R5)) => Ok(vec![0x5D]),
-            (&Some(Anl),&Some(A),&Some(R6)) => Ok(vec![0x5E]),
-            (&Some(Anl),&Some(A),&Some(R7)) => Ok(vec![0x5F]),
-
-            (&Some(Jz),&Some(Addr16(d)),&None) => Ok(vec![0x60,self.short_jmp(d as u16)]),
-            //TODo: code 61
-            (&Some(Xrl),&Some(Addr(d)),&Some(A)) => Ok(vec![0x62,d]),
-            (&Some(Xrl),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x63,a,d]),
-            (&Some(Xrl),&Some(A),&Some(Data(d))) => Ok(vec![0x64,d]),
-            (&Some(Xrl),&Some(A),&Some(Addr(d))) => Ok(vec![0x65,d]),
-            (&Some(Xrl),&Some(A),&Some(AtR0)) => Ok(vec![0x66]),
-            (&Some(Xrl),&Some(A),&Some(AtR1)) => Ok(vec![0x67]),
-            (&Some(Xrl),&Some(A),&Some(R0)) => Ok(vec![0x68]),
-            (&Some(Xrl),&Some(A),&Some(R1)) => Ok(vec![0x69]),
-            (&Some(Xrl),&Some(A),&Some(R2)) => Ok(vec![0x6A]),
-            (&Some(Xrl),&Some(A),&Some(R3)) => Ok(vec![0x6B]),
-            (&Some(Xrl),&Some(A),&Some(R4)) => Ok(vec![0x6C]),
-            (&Some(Xrl),&Some(A),&Some(R5)) => Ok(vec![0x6D]),
-            (&Some(Xrl),&Some(A),&Some(R6)) => Ok(vec![0x6E]),
-            (&Some(Xrl),&Some(A),&Some(R7)) => Ok(vec![0x6F]),
-
-            (&Some(Jnz),&Some(Addr16(d)),&None) => Ok(vec![0x70,self.short_jmp(d as u16)]),
-            //TODo: code 71
-            (&Some(Orl),&Some(C),&Some(Addr(d))) => Ok(vec![0x72,d]),
-            (&Some(Jmp),&Some(AtADptr),&None) => Ok(vec![0x73]),
-            (&Some(Mov),&Some(A),&Some(Data(d))) => Ok(vec![0x74,d]),
-            (&Some(Mov),&Some(Addr(a)),&Some(Data(d))) => Ok(vec![0x75,a,d]),
-            (&Some(Mov),&Some(AtR0),&Some(Data(d))) => Ok(vec![0x76,d]),
-            (&Some(Mov),&Some(AtR1),&Some(Data(d))) => Ok(vec![0x77,d]),
-            (&Some(Mov),&Some(R0),&Some(Data(d))) => Ok(vec![0x78,d]),
-            (&Some(Mov),&Some(R1),&Some(Data(d))) => Ok(vec![0x79,d]),
-            (&Some(Mov),&Some(R2),&Some(Data(d))) => Ok(vec![0x7A,d]),
-            (&Some(Mov),&Some(R3),&Some(Data(d))) => Ok(vec![0x7B,d]),
-            (&Some(Mov),&Some(R4),&Some(Data(d))) => Ok(vec![0x7C,d]),
-            (&Some(Mov),&Some(R5),&Some(Data(d))) => Ok(vec![0x7D,d]),
-            (&Some(Mov),&Some(R6),&Some(Data(d))) => Ok(vec![0x7E,d]),
-            (&Some(Mov),&Some(R7),&Some(Data(d))) => Ok(vec![0x7F,d]),
-
-            (&Some(Sjmp),&Some(Addr(d)),&None) => Ok(vec![0x80,self.short_jmp(d as u16)]),
-            //TODo: code 81
-            (&Some(Anl),&Some(C),&Some(Addr(d))) => Ok(vec![0x82,d]),
-            (&Some(Movc),&Some(A),&Some(AtAPc)) => Ok(vec![0x83]),
-            (&Some(Mov),&Some(Data(d)),&Some(A)) => Ok(vec![0x84,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(Addr(a))) => Ok(vec![0x85,a,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(AtR0)) => Ok(vec![0x86,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(AtR1)) => Ok(vec![0x87,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R0)) => Ok(vec![0x88,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R1)) => Ok(vec![0x89,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R2)) => Ok(vec![0x8A,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R3)) => Ok(vec![0x8B,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R4)) => Ok(vec![0x8C,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R5)) => Ok(vec![0x8D,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R6)) => Ok(vec![0x8E,d]),
-            (&Some(Mov),&Some(Data(d)),&Some(R7)) => Ok(vec![0x8F,d]),
-
-            (&Some(Mov),&Some(Dptr),&Some(Data16(d))) => Ok(vec![0x90,(d/0x100)as u8,(d%0x100) as u8]),
-            //TODo: code 91
-            (&Some(Mov),&Some(Addr(d)),&Some(C)) => Ok(vec![0x92,d]),
-            (&Some(Movc),&Some(A),&Some(AtADptr)) => Ok(vec![0x93]),
-            (&Some(Subb),&Some(A),&Some(Data(d))) => Ok(vec![0x94,d]),
-            (&Some(Subb),&Some(A),&Some(Addr(d))) => Ok(vec![0x95,d]),
-            (&Some(Subb),&Some(A),&Some(AtR0)) => Ok(vec![0x96]),
-            (&Some(Subb),&Some(A),&Some(AtR1)) => Ok(vec![0x97]),
-            (&Some(Subb),&Some(A),&Some(R0)) => Ok(vec![0x98]),
-            (&Some(Subb),&Some(A),&Some(R1)) => Ok(vec![0x99]),
-            (&Some(Subb),&Some(A),&Some(R2)) => Ok(vec![0x9A]),
-            (&Some(Subb),&Some(A),&Some(R3)) => Ok(vec![0x9B]),
-            (&Some(Subb),&Some(A),&Some(R4)) => Ok(vec![0x9C]),
-            (&Some(Subb),&Some(A),&Some(R5)) => Ok(vec![0x9D]),
-            (&Some(Subb),&Some(A),&Some(R6)) => Ok(vec![0x9E]),
-            (&Some(Subb),&Some(A),&Some(R7)) => Ok(vec![0x9F]),
-
-            //TODO: code A0
-            // (&Some(Ajmp),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
-            (&Some(Mov),&Some(C),&Some(Addr(d))) => Ok(vec![0xA2,d]),
-            (&Some(Inc),&Some(Dptr),&None) => Ok(vec![0xA3]),
-            (&Some(Mul),&Some(AB),&None) => Ok(vec![0xA4]),
-            (&Some(Mov),&Some(Addr(a)),&Some(Addr(d))) => Ok(vec![0xA5,a,d]),
-            (&Some(Mov),&Some(AtR0),&Some(Addr(d))) => Ok(vec![0xA6,d]),
-            (&Some(Mov),&Some(AtR1),&Some(Addr(d))) => Ok(vec![0xA7,d]),
-            (&Some(Mov),&Some(R0),&Some(Addr(d))) => Ok(vec![0xA8,d]),
-            (&Some(Mov),&Some(R1),&Some(Addr(d))) => Ok(vec![0xA9,d]),
-            (&Some(Mov),&Some(R2),&Some(Addr(d))) => Ok(vec![0xAA,d]),
-            (&Some(Mov),&Some(R3),&Some(Addr(d))) => Ok(vec![0xAB,d]),
-            (&Some(Mov),&Some(R4),&Some(Addr(d))) => Ok(vec![0xAC,d]),
-            (&Some(Mov),&Some(R5),&Some(Addr(d))) => Ok(vec![0xAD,d]),
-            (&Some(Mov),&Some(R6),&Some(Addr(d))) => Ok(vec![0xAE,d]),
-            (&Some(Mov),&Some(R7),&Some(Addr(d))) => Ok(vec![0xAF,d]),
-
-            ///TODO: code B0
-            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
-            (&Some(Cpl),&Some(Addr(d)),&None) => Ok(vec![0xB2,d]),
-            (&Some(Cpl),&Some(C),&None) => Ok(vec![0xB3]),
-            //TODO: codes B4-BF
-
-            (&Some(Push),&Some(Addr(d)),&None) => Ok(vec![0xC0,d]),
-            //TODo: code C1
-            (&Some(Clr),&Some(Addr(d)),&None) => Ok(vec![0xC2,d]),
-            (&Some(Clr),&Some(C),&None) => Ok(vec![0xC3]),
-            (&Some(Swap),&Some(A),&None) => Ok(vec![0xC4]),
-            (&Some(Xch),&Some(A),&Some(Addr(d))) => Ok(vec![0xC5,d]),
-            (&Some(Xch),&Some(A),&Some(AtR0)) => Ok(vec![0xC6]),
-            (&Some(Xch),&Some(A),&Some(AtR1)) => Ok(vec![0xC7]),
-            (&Some(Xch),&Some(A),&Some(R0)) => Ok(vec![0xC8]),
-            (&Some(Xch),&Some(A),&Some(R1)) => Ok(vec![0xC9]),
-            (&Some(Xch),&Some(A),&Some(R2)) => Ok(vec![0xCA]),
-            (&Some(Xch),&Some(A),&Some(R3)) => Ok(vec![0xCB]),
-            (&Some(Xch),&Some(A),&Some(R4)) => Ok(vec![0xCC]),
-            (&Some(Xch),&Some(A),&Some(R5)) => Ok(vec![0xCD]),
-            (&Some(Xch),&Some(A),&Some(R6)) => Ok(vec![0xCE]),
-            (&Some(Xch),&Some(A),&Some(R7)) => Ok(vec![0xCF]),
-
-            (&Some(Pop),&Some(Addr(d)),&None) => Ok(vec![0xD0,d]),
-            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xD1,d as u8]),
-            (&Some(Setb),&Some(Addr(d)),&None) => Ok(vec![0xD2,d]),
-            (&Some(Setb),&Some(C),&None) => Ok(vec![0xD3]),
-            (&Some(Da),&Some(A),&None) => Ok(vec![0xD4]),
-            (&Some(Djnz),&Some(Addr(d)),&Some(Addr16(a))) => Ok(vec![0xD5,d,self.short_jmp(a )]),
-            (&Some(Xchd),&Some(A),&Some(AtR0)) => Ok(vec![0xD6]),
-            (&Some(Xchd),&Some(A),&Some(AtR1)) => Ok(vec![0xD7]),
-            (&Some(Djnz),&Some(R0),&Some(Addr16(d))) => Ok(vec![0xD8,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R1),&Some(Addr16(d))) => Ok(vec![0xD9,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R2),&Some(Addr16(d))) => Ok(vec![0xDA,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R3),&Some(Addr16(d))) => Ok(vec![0xDB,self.short_jmp(d  as u16)]),
-            (&Some(Djnz),&Some(R4),&Some(Addr16(d))) => Ok(vec![0xDC,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R5),&Some(Addr16(d))) => Ok(vec![0xDD,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R6),&Some(Addr16(d))) => Ok(vec![0xDE,self.short_jmp(d as u16)]),
-            (&Some(Djnz),&Some(R7),&Some(Addr16(d))) => Ok(vec![0xDF,self.short_jmp(d as u16)]),
-
-            (&Some(Movx),&Some(A),&Some(AtDptr)) => Ok(vec![0xE0]),
-            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xE1,d as u8]),
-            (&Some(Movx),&Some(A),&Some(AtR0)) => Ok(vec![0xE2]),
-            (&Some(Movx),&Some(A),&Some(AtR1)) => Ok(vec![0xE3]),
-            (&Some(Clr),&Some(A),&None) => Ok(vec![0xE4]),
-            (&Some(Mov),&Some(A),&Some(Addr(d))) => Ok(vec![0xE5,d]),
-            (&Some(Mov),&Some(A),&Some(AtR0)) => Ok(vec![0xE6]),
-            (&Some(Mov),&Some(A),&Some(AtR1)) => Ok(vec![0xE7]),
-            (&Some(Mov),&Some(A),&Some(R0)) => Ok(vec![0xE8]),
-            (&Some(Mov),&Some(A),&Some(R1)) => Ok(vec![0xE9]),
-            (&Some(Mov),&Some(A),&Some(R2)) => Ok(vec![0xEA]),
-            (&Some(Mov),&Some(A),&Some(R3)) => Ok(vec![0xEB]),
-            (&Some(Mov),&Some(A),&Some(R4)) => Ok(vec![0xEC]),
-            (&Some(Mov),&Some(A),&Some(R5)) => Ok(vec![0xED]),
-            (&Some(Mov),&Some(A),&Some(R6)) => Ok(vec![0xEE]),
-            (&Some(Mov),&Some(A),&Some(R7)) => Ok(vec![0xEF]),
-
-            (&Some(Movx),&Some(AtDptr),&Some(A)) => Ok(vec![0xF0]),
-            // (&Some(Acall),&Some(Addr16(d)),&None) => Ok(vec![0xF1,d as u8]),
-            (&Some(Movx),&Some(AtR0),&Some(A)) => Ok(vec![0xF2]),
-            (&Some(Movx),&Some(AtR1),&Some(A)) => Ok(vec![0xF3]),
-            (&Some(Cpl),&Some(A),&None) => Ok(vec![0xF4]),
-            (&Some(Mov),&Some(Addr(d)),&Some(A)) => Ok(vec![0xF5,d]),
-            (&Some(Mov),&Some(AtR0),&Some(A)) => Ok(vec![0xF6]),
-            (&Some(Mov),&Some(AtR1),&Some(A)) => Ok(vec![0xF7]),
-            (&Some(Mov),&Some(R0),&Some(A)) => Ok(vec![0xF8]),
-            (&Some(Mov),&Some(R1),&Some(A)) => Ok(vec![0xF9]),
-            (&Some(Mov),&Some(R2),&Some(A)) => Ok(vec![0xFA]),
-            (&Some(Mov),&Some(R3),&Some(A)) => Ok(vec![0xFB]),
-            (&Some(Mov),&Some(R4),&Some(A)) => Ok(vec![0xFC]),
-            (&Some(Mov),&Some(R5),&Some(A)) => Ok(vec![0xFD]),
-            (&Some(Mov),&Some(R6),&Some(A)) => Ok(vec![0xFE]),
-            (&Some(Mov),&Some(R7),&Some(A)) => Ok(vec![0xFF]),
-
-            (&Some(Org),_,_) => Ok(vec![]),
-            (&Some(Cseg),_,_) => Ok(vec![]),
-            (&Some(Dseg),_,_) => Ok(vec![]),
-            (&Some(Db), &Some(Label(ref l)), &None) => {
-                let mut v = l.clone().into_bytes();
-                v.remove(l.len()-1);
-                v.remove(0);
-                v.push(0);
-                Ok(v)
+    pub fn is_new_section(&self) -> Option<u16> {
+        let is_new = match self.mnemonic {
+            Some(Org) | Some(Cseg) | Some(Dseg) => true,
+            _ => false,
+        };
+        if !is_new{
+            return None;
+        }
+        if self.ops.len()<1 {
+            return None;
+        }
+        match self.ops[0] {
+            Addr(d) => Some(d as u16),
+            Addr16(d) => Some(d),
+            Label(_) => {
+                match self.ops[1] {
+                    Addr(d) => Some(d as u16),
+                    Addr16(d) => Some(d),
+                    _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
+                }
             },
-            (&Some(Ds),&Some(Addr(d)),&None) => Ok(vec![0x10;d as usize]),
-            (&None,_,_) => Ok(vec![]),
-            (a@_,b@_,c@_) => Err(format!("Unimplemented: {:?},{:?},{:?}", a,b,c)),
+            _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
         }
     }
 
     pub fn from_line(line:Line, offset: u16) -> Result<Self, String> {
         let mne;
-        let op1;
-        let op2;
-        let mut op_ext = Vec::new();
+        // let op1;
+        // let op2;
+        let mut ops = Vec::new();
 
         if line.mnu.is_some() {
             mne = match line.mnu.unwrap().to_lowercase().as_ref() {
+                "div" => Some(Div),
                 "db" => Some(Db),
                 "mov" => Some(Mnemonic::Mov),
                 "sjmp" => Some(Mnemonic::Sjmp),
@@ -447,101 +250,102 @@ impl Instruction {
             mne = None;
         }
 
-        if line.ops.len()>0 {
-            op1 = match line.ops[0].to_lowercase().as_ref() {
-                "@r0" => Some(OpType::AtR0),
-                "@r1" => Some(OpType::AtR1),
-                "r1" => Some(OpType::R1),
-                "r2" => Some(OpType::R2),
-                "r3" => Some(OpType::R3),
-                "r4" => Some(OpType::R4),
-                "r5" => Some(OpType::R5),
-                "r6" => Some(OpType::R6),
-                "r7" => Some(OpType::R7),
-                "r0" => Some(OpType::R0),
-                "c" => Some(OpType::C),
-                "a" => Some(OpType::A),
-                "ab" => Some(OpType::AB),
-                "@dptr" => Some(AtDptr),
-                "@a+dptr" => Some(AtADptr),
-                "@a+pc" => Some(AtAPc),
-                "dptr" => Some(Dptr),
-                "b" =>Some(Label("B".to_string())),
+        // if line.ops.len()>0 {
+        //     op1 = match line.ops[0].to_lowercase().as_ref() {
+        //         "@r0" => Some(OpType::AtR0),
+        //         "@r1" => Some(OpType::AtR1),
+        //         "r1" => Some(OpType::R1),
+        //         "r2" => Some(OpType::R2),
+        //         "r3" => Some(OpType::R3),
+        //         "r4" => Some(OpType::R4),
+        //         "r5" => Some(OpType::R5),
+        //         "r6" => Some(OpType::R6),
+        //         "r7" => Some(OpType::R7),
+        //         "r0" => Some(OpType::R0),
+        //         "c" => Some(OpType::C),
+        //         "a" => Some(OpType::A),
+        //         "ab" => Some(OpType::AB),
+        //         "@dptr" => Some(&AtDptr),
+        //         "@a+dptr" => Some(&AtADptr),
+        //         "@a+pc" => Some(&AtAPc),
+        //         "dptr" => Some(&Dptr),
+        //         "b" =>Some(Label("B".to_string())),
+        //         op @ _ => {
+        //             match other_op(op.to_string()){
+        //                 Ok(op) => Some(op),
+        //                 Err(e) => return Err(e),
+        //             }
+        //         },
+        //     };
+        // }
+        // else {
+        //     op1 = None;
+        // }
+        //
+        // if line.ops.len()>1 {
+        //     op2 = match line.ops[1].to_lowercase().as_ref() {
+        //         "@r0" => Some(OpType::AtR0),
+        //         "@r1" => Some(OpType::AtR1),
+        //         "r1" => Some(OpType::R1),
+        //         "r2" => Some(OpType::R2),
+        //         "r3" => Some(OpType::R3),
+        //         "r4" => Some(OpType::R4),
+        //         "r5" => Some(OpType::R5),
+        //         "r6" => Some(OpType::R6),
+        //         "r7" => Some(OpType::R7),
+        //         "r0" => Some(OpType::R0),
+        //         "c" => Some(OpType::C),
+        //         "a" => Some(OpType::A),
+        //         "b" =>Some(Label("B".to_string())),
+        //         "dptr" => Some(&Dptr),
+        //         "@a+pc" => Some(&AtAPc),
+        //         "@a+dptr" => Some(&AtADptr),
+        //         "@dptr" => Some(&AtDptr),
+        //         op @ _ => {
+        //             match other_op(op.to_string()){
+        //                 Ok(op) => Some(op),
+        //                 Err(e) => return Err(e),
+        //             }
+        //         },
+        //     };
+        // }
+        // else {
+        //     op2 = None;
+        // }
+
+        for op in line.ops
+        {
+            let op_tmp= match op.to_lowercase().as_ref() {
+                "@r0" => OpType::AtR0,
+                "@r1" => OpType::AtR1,
+                "r1" => OpType::R1,
+                "r2" => OpType::R2,
+                "r3" => OpType::R3,
+                "r4" => OpType::R4,
+                "r5" => OpType::R5,
+                "r6" => OpType::R6,
+                "r7" => OpType::R7,
+                "r0" => OpType::R0,
+                "c" => OpType::C,
+                "a" => OpType::A,
+                "ab" => AB,
+                "b" => Label("B".to_string()),
+                "dptr" => Dptr,
+                "@a+pc" =>AtAPc,
+                "@a+dptr" => AtADptr,
+                "@dptr" => AtDptr,
                 op @ _ => {
                     match other_op(op.to_string()){
-                        Ok(op) => Some(op),
+                        Ok(op) => op,
                         Err(e) => return Err(e),
                     }
                 },
             };
-        }
-        else {
-            op1 = None;
+            ops.push(op_tmp);
+
         }
 
-        if line.ops.len()>1 {
-            op2 = match line.ops[1].to_lowercase().as_ref() {
-                "@r0" => Some(OpType::AtR0),
-                "@r1" => Some(OpType::AtR1),
-                "r1" => Some(OpType::R1),
-                "r2" => Some(OpType::R2),
-                "r3" => Some(OpType::R3),
-                "r4" => Some(OpType::R4),
-                "r5" => Some(OpType::R5),
-                "r6" => Some(OpType::R6),
-                "r7" => Some(OpType::R7),
-                "r0" => Some(OpType::R0),
-                "c" => Some(OpType::C),
-                "a" => Some(OpType::A),
-                "b" =>Some(Label("B".to_string())),
-                "dptr" => Some(Dptr),
-                "@a+pc" => Some(AtAPc),
-                "@a+dptr" => Some(AtADptr),
-                "@dptr" => Some(AtDptr),
-                op @ _ => {
-                    match other_op(op.to_string()){
-                        Ok(op) => Some(op),
-                        Err(e) => return Err(e),
-                    }
-                },
-            };
-        }
-        else {
-            op2 = None;
-        }
-        if line.ops.len()>2 {
-            for i in 3 .. line.ops.len()
-            {
-                let op_tmp= match line.ops[i].to_lowercase().as_ref() {
-                    "@r0" => OpType::AtR0,
-                    "@r1" => OpType::AtR1,
-                    "r1" => OpType::R1,
-                    "r2" => OpType::R2,
-                    "r3" => OpType::R3,
-                    "r4" => OpType::R4,
-                    "r5" => OpType::R5,
-                    "r6" => OpType::R6,
-                    "r7" => OpType::R7,
-                    "r0" => OpType::R0,
-                    "c" => OpType::C,
-                    "a" => OpType::A,
-                    "b" => Label("B".to_string()),
-                    "dptr" => Dptr,
-                    "@a+pc" =>AtAPc,
-                    "@a+dptr" => AtADptr,
-                    "@dptr" => AtDptr,
-                    op @ _ => {
-                        match other_op(op.to_string()){
-                            Ok(op) => op,
-                            Err(e) => return Err(e),
-                        }
-                    },
-                };
-                op_ext.push(op_tmp);
-            }
-        }
-
-        Ok(Instruction{offset:offset, num: line.num, label:line.label, mnemonic: mne, op1: op1, op2: op2, op_ext:op_ext})
+        Ok(Instruction{offset:offset, num: line.num, label:line.label, mnemonic: mne, ops:ops})
     }
 
     pub fn offset(&self) ->u16 {
@@ -550,36 +354,50 @@ impl Instruction {
 
     pub fn len(&self) ->i32 {
         let mut len = 0;
+        let mut movdptr = 0;
         if self.mnemonic.is_some() {
             match self.mnemonic.clone().unwrap(){
                 Org |Cseg | Dseg=> return 0,
                 Db => {
-                    match self.op1.clone().unwrap() {
-                        Label(l)=> return l.len() as i32,
-                        _ => {},
-                    };
+                    if self.ops.len() == 1 {
+                        match self.ops[0] {
+                            Label(ref l)=> return l.len() as i32,
+                            _ => {},
+                        };
+                    }
                 },
                 Ds => {
-                    match self.op1.clone().unwrap() {
-                        Addr(l)=> return l as i32,
-                        _ => {},
-                    };
+                    if self.ops.len() == 1 {
+                        match self.ops[0] {
+                            Addr(ref l)=> return *l as i32,
+                            _ => {},
+                        };
+                    }
                 },
+                Mov => movdptr +=1,
                 Lcall | Ljmp => return 3,
+                Cjne => return 3,
                 _ =>{},
             }
             len +=1;
-            if self.op1.is_some() {
-                match self.op1.clone().unwrap() {
+            if self.ops.len() > 0 {
+                match self.ops[0] {
                     Data(_)| Addr(_)| Addr16(_)=> len+=1,
                     Label(_) => len+=1,
                     Data16(_) => len+=2,
+                    Dptr => movdptr+=1,
                     _ => {},
                 };
             }
-            if self.op2.is_some() {
-                match self.op2.clone().unwrap() {
-                    Data(_)| Addr(_) | Addr16(_)=> len+=1,
+            if self.ops.len() > 1 {
+                match self.ops[1] {
+                    Addr16(_)| Addr(_) => len+=1,
+                    Data(_)=> {
+                        len+=1;
+                        if movdptr == 2 {
+                            len+=1;
+                        }
+                    },
                     Label(_) => len+=1,
                     Data16(_) => len+=2,
                     _ => {},
@@ -588,7 +406,6 @@ impl Instruction {
         }
 
         len
-
     }
 
     pub fn fix_label(&mut self, table: &Vec<(String, u16)>) -> Result<(), String>{
@@ -600,10 +417,9 @@ impl Instruction {
             _ => {},
         }
         let label_table = table.clone();
-        if self.op1.is_some(){
-            let op = self.op1.clone();
-            match op.unwrap() {
-                OpType::Label(label_full) => {
+        for (i, op) in self.ops.clone().iter().enumerate() {
+            match op {
+                &OpType::Label(ref label_full) => {
                     if label_full.to_lowercase() != "at"
                     {
                         let split: Vec<&str> = label_full.split('.').collect();
@@ -620,17 +436,25 @@ impl Instruction {
                                 Err(_) => 0,
                             };
                         }
-                        self.op1 = Some(OpType::Addr16(addr+add as u16));
+                        self.ops[i] = OpType::Addr16(addr+add as u16)
+
                     }
+                    // else {
+                    //     OpType::Label(*label_full)
+                    // }
                 },
                 _=>{},
-            }
+            };
+
+
+        }
+        if self.ops.len()>0{
+
         }
 
-        if self.op2.is_some(){
-            let op = self.op2.clone();
-            match op.unwrap() {
-                OpType::Label(label_full) => {
+        if self.ops.len()>1{
+            match self.ops.clone()[1] {
+                OpType::Label(ref label_full) => {
                     let split: Vec<&str> = label_full.split('.').collect();
                     let label = split[0];
                     let index = label_table.iter().position(|x| x.0.to_lowercase() == label);
@@ -646,7 +470,7 @@ impl Instruction {
                             Err(_) => 0,
                         };
                     }
-                    self.op2 = Some(OpType::Addr16(addr+add as u16));
+                    self.ops[1] = OpType::Addr16(addr+add as u16);
                 },
                 _=>{},
             }
@@ -656,41 +480,860 @@ impl Instruction {
         Ok(())
     }
 
-    pub fn validate(&self) -> Result<(), String> {
-        match &self.mnemonic {
-            &None => Ok(()),
-            &Some(Nop) => {
-                if self.op1.is_some() | self.op1.is_some(){
-                    return Err(String::from("NOP takes no operands"))
-                }
-                Ok(())
-            },
+    // pub fn validate(&self) -> Result<(), String> {
+    //     match &self.mnemonic {
+    //         &None => Ok(()),
+    //         &Some(Nop) => {
+    //             if self.ops.len() > 0 {
+    //                 return Err(String::from("NOP takes no operands"))
+    //             }
+    //             Ok(())
+    //         },
+    //
+    //         _ => Ok(()),
+    //     }
+    // }
+}
 
-            _ => Ok(()),
+impl Instruction {
+    fn cjne(&self) -> Result<Vec<u8>, String> {
+        if self.ops.len() < 3 {
+            return Err(format!("Too few arguments for CJNE: {}",self.num));
+        }
+        if self.ops.len() > 3 {
+            return Err(format!("Too many arguments for CJNE: {}",self.num));
+        }
+        match (self.ops.index(0), self.ops.index(1), self.ops.index(2)) {
+            (&A, &Data(d), &Addr16(a)) => Ok(vec![0xB4,d,self.short_jmp(a)?]),
+            (&A, &Addr(d), &Addr16(a)) => Ok(vec![0xB5,d as u8,self.short_jmp(a)?]),
+            (&AtR0, &Data(d), &Addr16(a)) => Ok(vec![0xB6,d,self.short_jmp(a)?]),
+            (&AtR1, &Data(d), &Addr16(a)) => Ok(vec![0xB7,d,self.short_jmp(a)?]),
+            (&R0, &Data(d), &Addr16(a)) => Ok(vec![0xB8,d,self.short_jmp(a)?]),
+            (&R1, &Data(d), &Addr16(a)) => Ok(vec![0xB9,d,self.short_jmp(a)?]),
+            (&R2, &Data(d), &Addr16(a)) => Ok(vec![0xBA,d,self.short_jmp(a)?]),
+            (&R3, &Data(d), &Addr16(a)) => Ok(vec![0xBB,d,self.short_jmp(a)?]),
+            (&R4, &Data(d), &Addr16(a)) => Ok(vec![0xBC,d,self.short_jmp(a)?]),
+            (&R5, &Data(d), &Addr16(a)) => Ok(vec![0xBD,d,self.short_jmp(a)?]),
+            (&R6, &Data(d), &Addr16(a)) => Ok(vec![0xBE,d,self.short_jmp(a)?]),
+            (&R7, &Data(d), &Addr16(a)) => Ok(vec![0xBF,d,self.short_jmp(a)?]),
+            (ref a@_, ref b@_,ref c@_) => Err(format!("Invalid operation: CJNE {:?},{:?},{:?}", a,b,c)),
         }
     }
 
-    pub fn is_new_section(&self) -> Option<u16> {
-        let is_new = match self.mnemonic {
-            Some(Org) | Some(Cseg) | Some(Dseg) => true,
-            _ => false,
-        };
-        if !is_new{
-            return None;
+    fn clr(&self) -> Result<Vec<u8>, String> {
+        if self.ops.len() < 1{
+            return Err(format!("Too few arguments for CLR: {}",self.num));
         }
-        match &self.op1 {
-            &Some(Addr(d)) => Some(d as u16),
-            &Some(Addr16(d)) => Some(d),
-            &Some(Label(_)) => {
-                match &self.op2 {
-                    &Some(Addr(d)) => Some(d as u16),
-                    &Some(Addr16(d)) => Some(d),
-                    _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
-                }
-            },
-            _ =>panic!("ORG, CSEG, or DSEG has invalid addr at line {}",self.num)
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for CLR: {}",self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0xE4]),
+            Addr(d) => Ok(vec![0xC2,d]),
+            C => Ok(vec![0xC3]),
+            ref a@_ => Err(format!("Invalid operation: CLR {:?}", a)),
         }
     }
+
+    fn setb(&self) -> Result<Vec<u8>, String> {
+        if self.ops.len() < 1{
+            return Err(format!("Too few arguments for SETB: {}",self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for SETB: {}",self.num));
+        }
+        match self.ops[0] {
+            Addr(d)=> Ok(vec![0xD2,d]),
+            C => Ok(vec![0xD3]),
+            ref a@_ => Err(format!("Invalid operation: SETB {:?}", a)),
+        }
+    }
+
+    fn cpl(&self) -> Result<Vec<u8>, String> {
+        if self.ops.len() < 1{
+            return Err(format!("Too few arguments for CPL: {}",self.num));
+        }
+        if self.ops.len() > 1{
+            return Err(format!("Too many arguments for CPL: {}",self.num));
+        }
+        match self.ops[0] {
+            Addr(d) => Ok(vec![0xB2,d]),
+            C => Ok(vec![0xB3]),
+            A => Ok(vec![0xF4]),
+            ref a@_ => Err(format!("Invalid operation: CPL {:?}", a)),
+        }
+    }
+
+    fn djnz(&self) -> Result<Vec<u8>, String> {
+        let op = "DJNZ";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&R0,&Addr16(d)) => Ok(vec![0xD8,self.short_jmp(d)?]),
+            (&R1,&Addr16(d)) => Ok(vec![0xD9,self.short_jmp(d)?]),
+            (&R2,&Addr16(d)) => Ok(vec![0xDA,self.short_jmp(d)?]),
+            (&R3,&Addr16(d)) => Ok(vec![0xDB,self.short_jmp(d)?]),
+            (&R4,&Addr16(d)) => Ok(vec![0xDC,self.short_jmp(d)?]),
+            (&R5,&Addr16(d)) => Ok(vec![0xDD,self.short_jmp(d)?]),
+            (&R6,&Addr16(d)) => Ok(vec![0xDE,self.short_jmp(d)?]),
+            (&R7,&Addr16(d)) => Ok(vec![0xDF,self.short_jmp(d)?]),
+            (&Addr(d),&Addr16(a)) => Ok(vec![0xD5,d,self.short_jmp(a)?]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn mov(&self) -> Result<Vec<u8>, String> {
+        let op = "MOV";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2  {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(d),&A) => Ok(vec![0xF5,d]),
+            (&AtR0,&A) => Ok(vec![0xF6]),
+            (&AtR1,&A) => Ok(vec![0xF7]),
+            (&R0,&A) => Ok(vec![0xF8]),
+            (&R1,&A) => Ok(vec![0xF9]),
+            (&R2,&A) => Ok(vec![0xFA]),
+            (&R3,&A) => Ok(vec![0xFB]),
+            (&R4,&A) => Ok(vec![0xFC]),
+            (&R5,&A) => Ok(vec![0xFD]),
+            (&R6,&A) => Ok(vec![0xFE]),
+            (&R7,&A) => Ok(vec![0xFF]),
+            (&A,&Data(d)) => Ok(vec![0x74,d]),
+            (&Addr(a),&Data(d)) => Ok(vec![0x75,a,d]),
+            (&AtR0,&Data(d)) => Ok(vec![0x76,d]),
+            (&AtR1,&Data(d)) => Ok(vec![0x77,d]),
+            (&R0,&Data(d)) => Ok(vec![0x78,d]),
+            (&R1,&Data(d)) => Ok(vec![0x79,d]),
+            (&R2,&Data(d)) => Ok(vec![0x7A,d]),
+            (&R3,&Data(d)) => Ok(vec![0x7B,d]),
+            (&R4,&Data(d)) => Ok(vec![0x7C,d]),
+            (&R5,&Data(d)) => Ok(vec![0x7D,d]),
+            (&R6,&Data(d)) => Ok(vec![0x7E,d]),
+            (&R7,&Data(d)) => Ok(vec![0x7F,d]),
+            (&Addr(d),&AB) => Ok(vec![0x84,d]),
+            (&Addr(d),&Addr(a)) => Ok(vec![0x85,a,d]),
+            (&Addr(d),&AtR0) => Ok(vec![0x86,d]),
+            (&Addr(d),&AtR1) => Ok(vec![0x87,d]),
+            (&Addr(d),&R0) => Ok(vec![0x88,d]),
+            (&Addr(d),&R1) => Ok(vec![0x89,d]),
+            (&Addr(d),&R2) => Ok(vec![0x8A,d]),
+            (&Addr(d),&R3) => Ok(vec![0x8B,d]),
+            (&Addr(d),&R4) => Ok(vec![0x8C,d]),
+            (&Addr(d),&R5) => Ok(vec![0x8D,d]),
+            (&Addr(d),&R6) => Ok(vec![0x8E,d]),
+            (&Addr(d),&R7) => Ok(vec![0x8F,d]),
+            (&A,&Addr(d)) => Ok(vec![0xE5,d]),
+            (&A,&AtR0) => Ok(vec![0xE6]),
+            (&A,&AtR1) => Ok(vec![0xE7]),
+            (&A,&R0) => Ok(vec![0xE8]),
+            (&A,&R1) => Ok(vec![0xE9]),
+            (&A,&R2) => Ok(vec![0xEA]),
+            (&A,&R3) => Ok(vec![0xEB]),
+            (&A,&R4) => Ok(vec![0xEC]),
+            (&A,&R5) => Ok(vec![0xED]),
+            (&A,&R6) => Ok(vec![0xEE]),
+            (&A,&R7) => Ok(vec![0xEF]),
+            (&Dptr,&Data16(d)) => Ok(vec![0x90,(d/0x100)as u8,(d%0x100) as u8]),
+            (&Dptr,&Data(d)) => Ok(vec![0x90,0x00,d]),
+
+            (&Addr(d),&C) => Ok(vec![0x92,d]),
+            (&C,&Addr(d)) => Ok(vec![0xA2,d]),
+
+            (&AtR0,&Addr(d)) => Ok(vec![0xA6,d]),
+            (&AtR1,&Addr(d)) => Ok(vec![0xA7,d]),
+            (&R0,&Addr(d)) => Ok(vec![0xA8,d]),
+            (&R1,&Addr(d)) => Ok(vec![0xA9,d]),
+            (&R2,&Addr(d)) => Ok(vec![0xAA,d]),
+            (&R3,&Addr(d)) => Ok(vec![0xAB,d]),
+            (&R4,&Addr(d)) => Ok(vec![0xAC,d]),
+            (&R5,&Addr(d)) => Ok(vec![0xAD,d]),
+            (&R6,&Addr(d)) => Ok(vec![0xAE,d]),
+            (&R7,&Addr(d)) => Ok(vec![0xAF,d]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn inc(&self) -> Result<Vec<u8>, String> {
+        let op ="INC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x04]),
+            Addr(d) => Ok(vec![0x05,d]),
+            AtR0 => Ok(vec![0x06]),
+            AtR1 => Ok(vec![0x07]),
+            R0 => Ok(vec![0x08]),
+            R1 => Ok(vec![0x09]),
+            R2 => Ok(vec![0x0A]),
+            R3 => Ok(vec![0x0B]),
+            R4 => Ok(vec![0x0C]),
+            R5 => Ok(vec![0x0D]),
+            R6 => Ok(vec![0x0E]),
+            R7 => Ok(vec![0x0F]),
+            Dptr => Ok(vec![0xA3]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn dec(&self) -> Result<Vec<u8>, String> {
+        let op ="DEC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x14]),
+            Addr(d) => Ok(vec![0x15,d]),
+            AtR0 => Ok(vec![0x16]),
+            AtR1 => Ok(vec![0x17]),
+            R0 => Ok(vec![0x18]),
+            R1 => Ok(vec![0x19]),
+            R2 => Ok(vec![0x1A]),
+            R3 => Ok(vec![0x1B]),
+            R4 => Ok(vec![0x1C]),
+            R5 => Ok(vec![0x1D]),
+            R6 => Ok(vec![0x1E]),
+            R7 => Ok(vec![0x1F]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn pop(&self) -> Result<Vec<u8>, String> {
+        let op ="POP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr(d) => Ok(vec![0xD0,d]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn push(&self) -> Result<Vec<u8>, String> {
+        let op ="PUSH";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr(d) => Ok(vec![0xC0,d]),
+
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn add(&self) -> Result<Vec<u8>, String> {
+        let op = "ADD";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&Data(d)) => Ok(vec![0x24,d]),
+            (&A,&Addr(d)) => Ok(vec![0x25,d]),
+            (&A,&AtR0) => Ok(vec![0x26]),
+            (&A,&AtR1) => Ok(vec![0x27]),
+            (&A,&R0) => Ok(vec![0x28]),
+            (&A,&R1) => Ok(vec![0x29]),
+            (&A,&R2) => Ok(vec![0x2A]),
+            (&A,&R3) => Ok(vec![0x2B]),
+            (&A,&R4) => Ok(vec![0x2C]),
+            (&A,&R5) => Ok(vec![0x2D]),
+            (&A,&R6) => Ok(vec![0x2E]),
+            (&A,&R7) => Ok(vec![0x2F]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn addc(&self) -> Result<Vec<u8>, String> {
+        let op = "ADDC";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&Data(d)) => Ok(vec![0x34,d]),
+            (&A,&Addr(d)) => Ok(vec![0x35,d]),
+            (&A,&AtR0) => Ok(vec![0x36]),
+            (&A,&AtR1) => Ok(vec![0x37]),
+            (&A,&R0) => Ok(vec![0x38]),
+            (&A,&R1) => Ok(vec![0x39]),
+            (&A,&R2) => Ok(vec![0x3A]),
+            (&A,&R3) => Ok(vec![0x3B]),
+            (&A,&R4) => Ok(vec![0x3C]),
+            (&A,&R5) => Ok(vec![0x3D]),
+            (&A,&R6) => Ok(vec![0x3E]),
+            (&A,&R7) => Ok(vec![0x3F]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn orl(&self) -> Result<Vec<u8>, String> {
+        let op = "ORL";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(a),&A) => Ok(vec![0x42,a]),
+            (&Addr(a),&Data(d)) => Ok(vec![0x43,a,d]),
+            (&A,&Data(d)) => Ok(vec![0x44,d]),
+            (&A,&Addr(d)) => Ok(vec![0x45,d]),
+            (&A,&AtR0) => Ok(vec![0x46]),
+            (&A,&AtR1) => Ok(vec![0x47]),
+            (&A,&R0) => Ok(vec![0x48]),
+            (&A,&R1) => Ok(vec![0x49]),
+            (&A,&R2) => Ok(vec![0x4A]),
+            (&A,&R3) => Ok(vec![0x4B]),
+            (&A,&R4) => Ok(vec![0x4C]),
+            (&A,&R5) => Ok(vec![0x4D]),
+            (&A,&R6) => Ok(vec![0x4E]),
+            (&A,&R7) => Ok(vec![0x4F]),
+            (&C,&Addr(d)) => Ok(vec![0x72,d]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn anl(&self) -> Result<Vec<u8>, String> {
+        let op = "ANL";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(a),&A) => Ok(vec![0x52,a]),
+            (&Addr(a),&Data(d)) => Ok(vec![0x53,a,d]),
+            (&A,&Data(d)) => Ok(vec![0x54,d]),
+            (&A,&Addr(d)) => Ok(vec![0x55,d]),
+            (&A,&AtR0) => Ok(vec![0x56]),
+            (&A,&AtR1) => Ok(vec![0x57]),
+            (&A,&R0) => Ok(vec![0x58]),
+            (&A,&R1) => Ok(vec![0x59]),
+            (&A,&R2) => Ok(vec![0x5A]),
+            (&A,&R3) => Ok(vec![0x5B]),
+            (&A,&R4) => Ok(vec![0x5C]),
+            (&A,&R5) => Ok(vec![0x5D]),
+            (&A,&R6) => Ok(vec![0x5E]),
+            (&A,&R7) => Ok(vec![0x5F]),
+            (&C,&Addr(d)) => Ok(vec![0x82,d]),
+
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn subb(&self) -> Result<Vec<u8>, String> {
+        let op = "SUBB";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&Data(d)) => Ok(vec![0x94,d]),
+            (&A,&Addr(d)) => Ok(vec![0x95,d]),
+            (&A,&AtR0) => Ok(vec![0x96]),
+            (&A,&AtR1) => Ok(vec![0x97]),
+            (&A,&R0) => Ok(vec![0x98]),
+            (&A,&R1) => Ok(vec![0x99]),
+            (&A,&R2) => Ok(vec![0x9A]),
+            (&A,&R3) => Ok(vec![0x9B]),
+            (&A,&R4) => Ok(vec![0x9C]),
+            (&A,&R5) => Ok(vec![0x9D]),
+            (&A,&R6) => Ok(vec![0x9E]),
+            (&A,&R7) => Ok(vec![0x9F]),
+
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn xch(&self) -> Result<Vec<u8>, String> {
+        let op = "XCH";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&Addr(d)) => Ok(vec![0xC5,d]),
+            (&A,&AtR0) => Ok(vec![0xC6]),
+            (&A,&AtR1) => Ok(vec![0xC7]),
+            (&A,&R0) => Ok(vec![0xC8]),
+            (&A,&R1) => Ok(vec![0xC9]),
+            (&A,&R2) => Ok(vec![0xCA]),
+            (&A,&R3) => Ok(vec![0xCB]),
+            (&A,&R4) => Ok(vec![0xCC]),
+            (&A,&R5) => Ok(vec![0xCD]),
+            (&A,&R6) => Ok(vec![0xCE]),
+            (&A,&R7) => Ok(vec![0xCF]),
+
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn xrl(&self) -> Result<Vec<u8>, String> {
+        let op = "XRL";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(d),&A) => Ok(vec![0x62,d]),
+            (&Addr(a),&Data(d)) => Ok(vec![0x63,a,d]),
+            (&A,&Data(d)) => Ok(vec![0x64,d]),
+            (&A,&Addr(d)) => Ok(vec![0x65,d]),
+            (&A,&AtR0) => Ok(vec![0x66]),
+            (&A,&AtR1) => Ok(vec![0x67]),
+            (&A,&R0) => Ok(vec![0x68]),
+            (&A,&R1) => Ok(vec![0x69]),
+            (&A,&R2) => Ok(vec![0x6A]),
+            (&A,&R3) => Ok(vec![0x6B]),
+            (&A,&R4) => Ok(vec![0x6C]),
+            (&A,&R5) => Ok(vec![0x6D]),
+            (&A,&R6) => Ok(vec![0x6E]),
+            (&A,&R7) => Ok(vec![0x6F]),
+
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn movx(&self) -> Result<Vec<u8>, String> {
+        let op = "MOVX";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&AtDptr) => Ok(vec![0xE0]),
+            // (&Some(&Acall),&Addr16(d),&None) => Ok(vec![0xE1,d as u8]),
+            (&A,&AtR0) => Ok(vec![0xE2]),
+            (&A,&AtR1) => Ok(vec![0xE3]),
+
+
+            (&AtDptr,&A) => Ok(vec![0xF0]),
+            // (&Some(&Acall),&Addr16(d),&None) => Ok(vec![0xF1,d as u8]),
+            (&AtR0,&A) => Ok(vec![0xF2]),
+            (&AtR1,&A) => Ok(vec![0xF3]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn movc(&self) -> Result<Vec<u8>, String> {
+        let op = "MOVC";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&AtAPc) => Ok(vec![0x83]),
+            (&A,&AtADptr) => Ok(vec![0x93]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn ret(&self) -> Result<Vec<u8>, String> {
+        let op = "RET";
+        if self.ops.len() > 0 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        Ok(vec![0x22])
+    }
+
+    fn nop(&self) -> Result<Vec<u8>, String> {
+        let op = "NOP";
+        if self.ops.len() > 0 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        Ok(vec![0x00])
+    }
+
+    fn jb(&self) -> Result<Vec<u8>, String> {
+        let op = "JB";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(a),&Addr16(d)) => Ok(vec![0x20,a,self.short_jmp(d)?]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn ajmp(&self) -> Result<Vec<u8>, String> {
+        let op = "AJMP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x01,d as u8]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn ljmp(&self) -> Result<Vec<u8>, String> {
+        let op = "LJMP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x02,(d/0x100) as u8, (d%100) as u8]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn acall(&self) -> Result<Vec<u8>, String> {
+        let op = "ACALL";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x11,d as u8]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn lcall(&self) -> Result<Vec<u8>, String> {
+        let op = "LCALL";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x12,(d/0x100) as u8, (d%100) as u8]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn sjmp(&self) -> Result<Vec<u8>, String> {
+        let op = "SJMP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x80,self.short_jmp(d)?]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn rr(&self) -> Result<Vec<u8>, String> {
+        let op = "rr";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x03]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn rrc(&self) -> Result<Vec<u8>, String> {
+        let op = "RRC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x13]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn rl(&self) -> Result<Vec<u8>, String> {
+        let op = "RL";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x23]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn reti(&self) -> Result<Vec<u8>, String> {
+        let op = "RETI";
+        if self.ops.len() > 0 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        Ok(vec![0x32])
+    }
+
+    fn rlc(&self) -> Result<Vec<u8>, String> {
+        let op = "RLC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0x33]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jc(&self) -> Result<Vec<u8>, String> {
+        let op = "JC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x40,self.short_jmp(d)?]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jnc(&self) -> Result<Vec<u8>, String> {
+        let op = "JNC";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x50,self.short_jmp(d)?]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jz(&self) -> Result<Vec<u8>, String> {
+        let op = "JZ";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x60,self.short_jmp(d)?]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jnz(&self) -> Result<Vec<u8>, String> {
+        let op = "JNZ";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr16(d) => Ok(vec![0x70,self.short_jmp(d)?]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jmp(&self) -> Result<Vec<u8>, String> {
+        let op = "JMP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            AtADptr => Ok(vec![0x73]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn mul(&self) -> Result<Vec<u8>, String> {
+        let op = "MUL";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            AB => Ok(vec![0xA4]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn div(&self) -> Result<Vec<u8>, String> {
+        let op = "DIV";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            AB => Ok(vec![0x84]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn swap(&self) -> Result<Vec<u8>, String> {
+        let op = "SWAP";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0xC4]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn da(&self) -> Result<Vec<u8>, String> {
+        let op = "DA";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            A => Ok(vec![0xD4]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn jnb(&self) -> Result<Vec<u8>, String> {
+        let op = "JNB";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0), self.ops.index(1)) {
+            (&Addr(a),&Addr16(d)) => Ok(vec![0x30,a,self.short_jmp(d)?]),
+            (a@_,b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn jbc(&self) -> Result<Vec<u8>, String> {
+        let op = "JBC";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&Addr(b),&Addr16(d)) => Ok(vec![0x10,b,self.short_jmp(d)?]),
+            (ref a@_,ref b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn xchd(&self) -> Result<Vec<u8>, String> {
+        let op = "XCHD";
+        if self.ops.len() < 2 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match (self.ops.index(0),self.ops.index(1)) {
+            (&A,&AtR0) => Ok(vec![0xD6]),
+            (&A,&AtR1) => Ok(vec![0xD7]),
+            (ref a@_,ref b@_) => Err(format!("Invalid operation: {} {:?},{:?}",op, a,b)),
+        }
+    }
+
+    fn db(&self) -> Result<Vec<u8>, String> {
+        //TODO: make this better
+        let op = "DB";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 2 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Label(ref l) => {
+                let mut v = l.clone().into_bytes();
+                v.remove(l.len()-1);
+                v.remove(0);
+                v.push(0);
+                Ok(v)
+            },
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
+    fn ds(&self) -> Result<Vec<u8>, String> {
+        //TODO: make this better
+        let op = "DS";
+        if self.ops.len() < 1 {
+            return Err(format!("Too few arguments for {}: {}",op,self.num));
+        }
+        if self.ops.len() > 1 {
+            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        }
+        match self.ops[0] {
+            Addr(d) => Ok(vec![0x10;d as usize]),
+            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
+        }
+    }
+
 }
 
 fn other_op(mut op: String) -> Result<OpType, String> {
@@ -757,87 +1400,4 @@ fn other_op(mut op: String) -> Result<OpType, String> {
         Err(_) => {},
     };
     Ok(Label(op))
-}
-
-
-impl Display for Instruction {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        let mut out :String = "".to_string();
-        match self.label{
-            Some(ref label) => out += &format!("{:02x}-label\t: {}\n",self.offset,label),
-            _ => {},
-        };
-        match self.mnemonic{
-            Some(ref mnu) => out += &format!("{:02x}-Mnumonic\t: {:?}\n",self.offset,mnu),
-            _ => return write!(f, "{}", out),
-        }
-        match self.op1{
-            Some(ref op) => out += &format!("{:02x}-Operand 1\t: {:?}\n",self.offset,op),
-            _ => {},
-        };
-        match self.op2{
-            Some(ref op) => out += &format!("{:02x}-Operand 2\t: {:?}\n",self.offset,op),
-            _ => {},
-        };
-        write!(f, "{}", out)
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn other_op_data() {
-        assert_eq!(other_op(String::from("#0")), Ok(Data(0)));
-        assert_eq!(other_op(String::from("#10")), Ok(Data(10)));
-        assert_eq!(other_op(String::from("#10h")), Ok(Data(0x10)));
-        assert_eq!(other_op(String::from("#100h")), Ok(Data16(0x100)));
-        assert_eq!(other_op(String::from("#10000")), Ok(Data16(10000)));
-        match other_op(String::from("#10000h")) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
-        match other_op(String::from("#65536")) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
-
-
-    }
-
-    #[test]
-    fn other_op_addr() {
-        assert_eq!(other_op(String::from("0")), Ok(Addr(0)));
-        assert_eq!(other_op(String::from("10")), Ok(Addr(10)));
-        assert_eq!(other_op(String::from("0x10")), Ok(Addr(0x10)));
-        assert_eq!(other_op(String::from("10h")), Ok(Addr(0x10)));
-        assert_eq!(other_op(String::from("100h")), Ok(Addr16(0x100)));
-        assert_eq!(other_op(String::from("10000")), Ok(Addr16(10000)));
-        match other_op(String::from("#10000h")) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
-        match other_op(String::from("#65536")) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
-
-    }
-
-    #[test]
-    fn nop() {
-        let ins1 = Instruction{offset:0, num:0, label:None, mnemonic:Some(Nop), op1:None, op2:None};
-        let ins2 = Instruction{offset:22, num:4, label:Some(String::from("HI")), mnemonic:Some(Nop), op1:Some(R1), op2:None};
-
-        assert_eq!(ins1.validate(), Ok(()));
-        match ins2.validate() {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
-        assert_eq!(ins1.to_hex(), Ok(vec![00]));
-        assert_eq!(ins1.len(), 1);
-    }
-
-
 }
