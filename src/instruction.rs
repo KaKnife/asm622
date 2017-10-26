@@ -417,11 +417,14 @@ impl Instruction {
             _ => {},
         }
         let label_table = table.clone();
-        for (i, op) in self.ops.clone().iter().enumerate() {
-            match op {
-                &OpType::Label(ref label_full) => {
-                    if label_full.to_lowercase() != "at"
+        for i in 0 .. self.ops.len() {
+            let temp_op = match self.ops[i] {
+                OpType::Label(ref label_full) => {
+                    if label_full.to_lowercase() == "at"
                     {
+                        OpType::Label(label_full.clone())
+                    }
+                    else {
                         let split: Vec<&str> = label_full.split('.').collect();
                         let label = split[0];
                         let index = label_table.iter().position(|x| x.0.to_lowercase() == label);
@@ -436,46 +439,13 @@ impl Instruction {
                                 Err(_) => 0,
                             };
                         }
-                        self.ops[i] = OpType::Addr16(addr+add as u16)
-
+                        OpType::Addr16(addr+add as u16)
                     }
-                    // else {
-                    //     OpType::Label(*label_full)
-                    // }
                 },
-                _=>{},
+                ref o@_=>o.clone(),
             };
-
-
+            self.ops[i] = temp_op;
         }
-        if self.ops.len()>0{
-
-        }
-
-        if self.ops.len()>1{
-            match self.ops.clone()[1] {
-                OpType::Label(ref label_full) => {
-                    let split: Vec<&str> = label_full.split('.').collect();
-                    let label = split[0];
-                    let index = label_table.iter().position(|x| x.0.to_lowercase() == label);
-                    if index.is_none(){
-                        return Err(format!("Could not find label:{}: {}",self.num,label));
-                        // return Err(format!("Could not find label:{}: {}",self.num,label));
-                    }
-                    let addr = label_table[index.unwrap()].1;
-                    let mut add =0;
-                    if split.len()>1 {
-                        add = match u8::from_str_radix(split[1], 16){
-                            Ok(a) => a,
-                            Err(_) => 0,
-                        };
-                    }
-                    self.ops[1] = OpType::Addr16(addr+add as u16);
-                },
-                _=>{},
-            }
-        }
-
 
         Ok(())
     }
@@ -642,6 +612,7 @@ impl Instruction {
             (&A,&R6) => Ok(vec![0xEE]),
             (&A,&R7) => Ok(vec![0xEF]),
             (&Dptr,&Data16(d)) => Ok(vec![0x90,(d/0x100)as u8,(d%0x100) as u8]),
+            (&Dptr,&Addr16(d)) => Ok(vec![0x90,(d/0x100)as u8,(d%0x100) as u8]),
             (&Dptr,&Data(d)) => Ok(vec![0x90,0x00,d]),
 
             (&Addr(d),&C) => Ok(vec![0x92,d]),
@@ -1304,19 +1275,23 @@ impl Instruction {
         if self.ops.len() < 1 {
             return Err(format!("Too few arguments for {}: {}",op,self.num));
         }
-        if self.ops.len() > 2 {
-            return Err(format!("Too many arguments for {}: {}",op,self.num));
+        let mut vec_ret = Vec::new();
+        for tmp_op in &self.ops{
+            match tmp_op {
+                &Label(ref l) => {
+                    let mut v = l.clone().into_bytes();
+                    v.remove(l.len()-1);
+                    v.remove(0);
+                    v.push(0);
+                    vec_ret.append(&mut v);
+                },
+                &Addr(d) => {
+                    vec_ret.push(d);
+                },
+                ref a@_ => return Err(format!("Invalid operation: {} {:?}",op, a)),
+            }
         }
-        match self.ops[0] {
-            Label(ref l) => {
-                let mut v = l.clone().into_bytes();
-                v.remove(l.len()-1);
-                v.remove(0);
-                v.push(0);
-                Ok(v)
-            },
-            ref a@_ => Err(format!("Invalid operation: {} {:?}",op, a)),
-        }
+        Ok(vec_ret)
     }
 
     fn ds(&self) -> Result<Vec<u8>, String> {
